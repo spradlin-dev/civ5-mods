@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Mod id="9766ca6f-8021-42bd-8627-4008ce4b48c0" version="1.0">
+  <Properties>
+    <Name>Dismiss Notifications Shortcut</Name>
+    <Stability>Alpha</Stability>
+    <Description>Adds a keyboard shortcut (CTRL+SHIFT+D) for dismissing all notifications.</Description>
+    <Teaser>Press "CTRL+SHIFT+D" to dismiss all notifications</Teaser>
+    <Authors>spradlin-dev</Authors>
+    <SupportsSinglePlayer>1</SupportsSinglePlayer>
+    <HideSetupGame>0</HideSetupGame>
+    <AffectsSavedGames>0</AffectsSavedGames>
+    <MinCompatibleSaveVersion>0</MinCompatibleSaveVersion>
+    <SupportsMultiplayer>1</SupportsMultiplayer>
+    <SupportsHotSeat>0</SupportsHotSeat>
+    <SupportsMac>1</SupportsMac>
+    <ReloadLandmarkSystem>0</ReloadLandmarkSystem>
+    <ReloadStrategicViewSystem>0</ReloadStrategicViewSystem>
+    <ReloadUnitSystem>0</ReloadUnitSystem>
+  </Properties>
+  <Dependencies />
+  <References />
+  <Blocks />
+  <Files>
+    <File md5="24de9cd93fadce911c3826b05e3e1692" import="0">DismissAllNotifications.lua</File>
+  </Files>
+  <EntryPoints>
+    <EntryPoint type="InGameUIAddin" file="DismissAllNotifications.lua">
+      <Name>DismissAllNotifications</Name>
+      <Description>Loads all lua contexts</Description>
+      <Contexts>
+        <Context>Gameplay</Context>
+      </Contexts>
+    </EntryPoint>
+  </EntryPoints>
+</Mod>
+

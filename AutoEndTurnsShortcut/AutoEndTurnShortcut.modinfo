@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Mod id="79cb5c70-d530-414d-b3a4-55294156dc68" version="1.0">
+  <Properties>
+    <Name>Toggle Auto End Turns Shortcut</Name>
+    <Stability>Alpha</Stability>
+    <Description>Adds a keyboard shortcut (CTRL+SHIFT+T) for toggling the Single Player Auto End Turn option.</Description>
+    <Teaser>Press "CTRL+SHIFT+T" to toggle Auto End Turns</Teaser>
+    <Authors>spradlin-dev</Authors>
+    <SupportsSinglePlayer>1</SupportsSinglePlayer>
+    <HideSetupGame>0</HideSetupGame>
+    <AffectsSavedGames>0</AffectsSavedGames>
+    <MinCompatibleSaveVersion>0</MinCompatibleSaveVersion>
+    <SupportsMultiplayer>1</SupportsMultiplayer>
+    <SupportsHotSeat>0</SupportsHotSeat>
+    <SupportsMac>1</SupportsMac>
+    <ReloadLandmarkSystem>0</ReloadLandmarkSystem>
+    <ReloadStrategicViewSystem>0</ReloadStrategicViewSystem>
+    <ReloadUnitSystem>0</ReloadUnitSystem>
+  </Properties>
+  <Dependencies />
+  <References />
+  <Blocks />
+  <Files>
+    <File md5="0a60590e8949e4e8d85b093a3c9c3e62" import="0">AutoEndTurnShortcut.lua</File>
+  </Files>
+  <EntryPoints>
+    <EntryPoint type="InGameUIAddin" file="AutoEndTurnShortcut.lua">
+      <Name>AutoEndTurnShortcut</Name>
+      <Description>Loads all lua contexts</Description>
+      <Contexts>
+        <Context>Gameplay</Context>
+      </Contexts>
+    </EntryPoint>
+  </EntryPoints>
+</Mod>
+
