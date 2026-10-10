@@ -159,6 +159,11 @@ CvGame::~CvGame()
 //	--------------------------------------------------------------------------------
 void CvGame::init(HandicapTypes eHandicap)
 {
+	if(FILogFile* pLog = LOGFILEMGR.GetLog("ClaudePlayer.log", FILogFile::kDontTimeStamp))
+	{
+		pLog->Msg("Claude Player DLL loaded: CvGame::init");
+	}
+
 	bool bValid;
 	int iStartTurn;
 	int iEstimateEndTurn;

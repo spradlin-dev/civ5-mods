@@ -1,0 +1,5 @@
+CvGameCoreSource/BuildOutput/
+CvGameCoreSource/BuildTemp/
+*.ncb
+*.suo
+*.user
