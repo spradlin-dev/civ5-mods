@@ -6,6 +6,7 @@
 	All rights reserved. 
 	------------------------------------------------------------------------------------------------------- */
 #include "CvGameCoreDLLPCH.h"
+#include "Claude/ClaudeBridge.h"
 #include "CvDllContext.h"
 
 #include "CvDllBuildingInfo.h"
@@ -687,6 +688,7 @@ void CvDllGameContext::Init()
 //------------------------------------------------------------------------------
 void CvDllGameContext::Uninit()
 {
+	ClaudeBridge::Get().Shutdown();
 	GC.uninit();
 }
 //------------------------------------------------------------------------------

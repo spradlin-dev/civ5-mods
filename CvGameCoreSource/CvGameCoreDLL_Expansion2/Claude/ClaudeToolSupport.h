@@ -1,0 +1,120 @@
+#pragma once
+
+#include <string>
+#include "picojson.h"
+
+class CvPlayer;
+class CvUnit;
+class CvCity;
+class CvPlot;
+struct OrderData;
+
+std::string ClaudeFormat(const char* fmt, ...);
+
+// True while the player can still give orders this turn. Shared by the bridge's
+// turn flag and the status tool so both agree.
+bool ClaudeIsPlayerTurn(const CvPlayer& kPlayer);
+
+// Helpers shared by the tool implementation files. Everything here runs on the game thread.
+namespace ClaudeTool
+{
+	typedef picojson::object JObj;
+	typedef picojson::array JArr;
+	typedef picojson::value JVal;
+
+	JVal J(int v);
+	JVal J(double v);
+	JVal J(bool v);
+	JVal J(const char* s);
+	JVal J(const std::string& s);
+
+	bool IsInt(const JVal& v, int& out); // a whole number that fits an int
+	int ArgInt(const JObj& a, const char* k, int def);
+	bool RequireInt(const JObj& a, const char* k, int& out, std::string& err);
+	bool ArgBool(const JObj& a, const char* k, bool def);
+	std::string ArgStr(const JObj& a, const char* k);
+	bool HasArg(const JObj& a, const char* k);
+
+	CvPlayer* Me(std::string& err);
+	// Only while the turn is open; use for every tool that changes game state.
+	CvPlayer* MeActing(std::string& err);
+
+	// The game flags unit orders for human players that arrive outside its network
+	// message path; its own handlers wrap such calls exactly like this.
+	struct NetMessageScope
+	{
+		NetMessageScope();
+		~NetMessageScope();
+	};
+
+	double Moves(int iMoves);
+	bool AiProcessing();
+	bool IsEnemyOf(CvPlayer* me, PlayerTypes eOther);
+	bool PolicyChoiceAvailable(CvPlayer* me);
+
+	const char* TerrainName(TerrainTypes e);
+	const char* FeatureName(FeatureTypes e);
+	const char* ResourceName(ResourceTypes e);
+	const char* ImprovementName(ImprovementTypes e);
+	const char* RouteName(RouteTypes e);
+	const char* UnitTypeName(UnitTypes e);
+	const char* UnitTypeKey(UnitTypes e);
+	const char* BuildingName(BuildingTypes e);
+	const char* TechName(TechTypes e);
+	const char* BuildName(BuildTypes e);
+	const char* EraName(EraTypes e);
+	const char* PromotionName(PromotionTypes e);
+	std::string CivName(PlayerTypes e);
+	std::string Localized(const char* szKey);
+
+	UnitTypes FindUnitType(const std::string& key);
+	BuildingTypes FindBuildingType(const std::string& key);
+	TechTypes FindTechType(const std::string& key);
+	BuildTypes FindBuildType(const std::string& key);
+	PromotionTypes FindPromotionType(const std::string& key);
+	PolicyTypes FindPolicyType(const std::string& key);
+	PolicyBranchTypes FindPolicyBranchType(const std::string& key);
+	ImprovementTypes FindImprovementType(const std::string& key);
+	ResourceTypes FindResourceType(const std::string& key);
+	// Matches a civilization's short name, player name, or numeric id as text.
+	PlayerTypes FindPlayer(const std::string& key);
+
+	const char* FocusName(CityAIFocusTypes e);
+	bool FindFocus(const std::string& name, CityAIFocusTypes& out);
+	std::string FocusNames();
+
+	std::string BlockingName(EndTurnBlockingTypes e);
+	// Computed now, the way CvGame::updateTestEndTurn does; the engine stops
+	// refreshing the player's cached value while a popup is up.
+	EndTurnBlockingTypes EndTurnBlocking(CvPlayer* me);
+	std::string UnitActivity(CvUnit* u);
+	std::string OrderName(const OrderData* od);
+
+	// What one of Claude's units would hit on a tile, following the game's own rules:
+	// an enemy city wins over its garrison; otherwise the game's choice of defender.
+	struct AttackTarget
+	{
+		CvUnit* unit;
+		CvCity* city;
+		bool ranged;
+	};
+	bool ResolveAttackTarget(CvPlayer* me, CvUnit* u, CvPlot* p, AttackTarget& out, std::string& why);
+
+	JVal UnitJson(CvUnit* u);
+	JVal CityJson(CvCity* c);
+	JVal PlotJson(CvPlot* p, TeamTypes eTeam, PlayerTypes eMe, int cx, int cy);
+	JVal ResearchJson(CvPlayer* me);
+	JArr CitiesJson(CvPlayer* me);
+	JArr UnitsJson(CvPlayer* me);
+	JArr PromotionsAvailable(CvUnit* u);
+
+	struct UnitActionDef
+	{
+		const char* name;
+		bool (*can)(CvUnit*, CvPlot*);
+		const MissionTypes (*mission)();
+		const char* refusal;
+	};
+	const UnitActionDef* UnitActions(size_t& count);
+	std::string UnitActionNames();
+}

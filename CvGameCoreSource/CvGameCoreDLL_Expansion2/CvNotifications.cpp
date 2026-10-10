@@ -796,6 +796,18 @@ bool CvNotifications::IsNotificationDismissed(int iZeroBasedIndex)
 	return m_aNotifications[iRealIndex].m_bDismissed;
 }
 
+int CvNotifications::GetNotificationX(int iZeroBasedIndex)
+{
+	int iRealIndex = (m_iNotificationsBeginIndex + iZeroBasedIndex) % m_aNotifications.size();
+	return m_aNotifications[iRealIndex].m_iX;
+}
+
+int CvNotifications::GetNotificationY(int iZeroBasedIndex)
+{
+	int iRealIndex = (m_iNotificationsBeginIndex + iZeroBasedIndex) % m_aNotifications.size();
+	return m_aNotifications[iRealIndex].m_iY;
+}
+
 
 void CvNotifications::Activate(Notification& notification)
 {

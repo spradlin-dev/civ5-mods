@@ -98,6 +98,8 @@ void CvLuaGame::RegisterMembers(lua_State* L)
 	Method(GetNumSequentialHumans);
 	Method(GetGameTurn);
 	Method(GetClaudeLog);
+	Method(ClaudeNotePopup);
+	Method(ClaudeDialogsToClose);
 	Method(SetGameTurn);
 	Method(GetTurnYear);
 	Method(GetGameTurnYear);
@@ -717,6 +719,28 @@ int CvLuaGame::lGetClaudeLog(lua_State* L)
 	lua_pushinteger(L, seq);
 	lua_pushlstring(L, text.data(), text.size());
 	return 2;
+}
+//------------------------------------------------------------------------------
+//void ClaudeNotePopup(int type, int data1, int data2, int data3, bool option1, string text);
+int CvLuaGame::lClaudeNotePopup(lua_State* L)
+{
+	if(!lua_isnumber(L, 1)) return 0;
+	const int iType = lua_tointeger(L, 1);
+	const int iData1 = lua_tointeger(L, 2);
+	const int iData2 = lua_tointeger(L, 3);
+	const int iData3 = lua_tointeger(L, 4);
+	const bool bOption1 = lua_toboolean(L, 5) != 0;
+	const char* szText = lua_tostring(L, 6);
+	ClaudeBridge::Get().NotePopup(iType, iData1, iData2, iData3, bOption1, szText ? szText : "");
+	return 0;
+}
+//------------------------------------------------------------------------------
+//string ClaudeDialogsToClose();
+int CvLuaGame::lClaudeDialogsToClose(lua_State* L)
+{
+	std::string names = ClaudeBridge::Get().TakeDialogsToClose();
+	lua_pushlstring(L, names.data(), names.size());
+	return 1;
 }
 //------------------------------------------------------------------------------
 //void setGameTurn(int iNewValue);

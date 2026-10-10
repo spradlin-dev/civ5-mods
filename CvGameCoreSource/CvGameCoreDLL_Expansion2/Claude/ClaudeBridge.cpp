@@ -4,6 +4,8 @@
 #include "ClaudeBridge.h"
 #include "ClaudeHttp.h"
 #include "ClaudeTools.h"
+#include "ClaudeToolSupport.h"
+#include "ClaudePopups.h"
 #include "../CvGame.h"
 #include "../CvPlayer.h"
 #include "../CvGlobals.h"
@@ -15,6 +17,14 @@
 #define CLAUDE_WAIT_DEFAULT_SECONDS 25.0
 #define CLAUDE_WAIT_MAX_SECONDS 55.0
 #define CLAUDE_MAX_LOG_ENTRIES 5000
+#define CLAUDE_MAX_POPUPS 200
+
+struct ClaudePendingPopup
+{
+	int type, data1, data2, data3;
+	bool option1;
+	std::string text;
+};
 
 struct ClaudeJob
 {
@@ -86,6 +96,13 @@ struct ClaudeBridge::Impl
 	std::vector<std::string> log;
 	int logSeq;
 	int lastLogTurn;
+	std::vector<ClaudePendingPopup> pendingPopups; // written by the UI thread, drained by Tick
+	int pendingDropped;
+	std::vector<ClaudePopup> popups;
+	int popupSeq;
+	std::string dialogsToClose; // newline-joined; ClaudeLog.lua looks each name up under /InGame/
+	unsigned int gameSeed;
+	int gameTurn;
 
 	// Written by the game thread, read by the HTTP thread.
 	volatile bool shuttingDown;
@@ -98,9 +115,12 @@ struct ClaudeBridge::Impl
 	// game thread
 	void Tick();
 	void TryStart();
+	void Shutdown();
 	void UpdateTurnFlags();
 	void RunJob(ClaudeJob* pJob);
 	void LogLine(const std::string& text);
+	void DrainPopups();
+	void ResetForNewGame();
 
 	// any thread
 	int GetLogText(std::string& out);
@@ -123,17 +143,85 @@ ClaudeBridge& ClaudeBridge::Get()
 ClaudeBridge::ClaudeBridge() : m_pImpl(new Impl()) {}
 ClaudeBridge::~ClaudeBridge() { delete m_pImpl; }
 void ClaudeBridge::Tick() { m_pImpl->Tick(); }
+void ClaudeBridge::Shutdown() { m_pImpl->Shutdown(); }
 void ClaudeBridge::LogLine(const std::string& text) { m_pImpl->LogLine(text); }
 int ClaudeBridge::GetLogText(std::string& out) { return m_pImpl->GetLogText(out); }
 
+void ClaudeBridge::NotePopup(int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text)
+{
+	ClaudePendingPopup p;
+	p.type = iType; p.data1 = iData1; p.data2 = iData2; p.data3 = iData3; p.option1 = bOption1; p.text = text;
+	EnterCriticalSection(&m_pImpl->lock);
+	if(m_pImpl->pendingPopups.size() < CLAUDE_MAX_POPUPS) m_pImpl->pendingPopups.push_back(p);
+	else ++m_pImpl->pendingDropped;
+	LeaveCriticalSection(&m_pImpl->lock);
+}
+
+std::string ClaudeBridge::TakeDialogsToClose()
+{
+	std::string out;
+	EnterCriticalSection(&m_pImpl->lock);
+	out.swap(m_pImpl->dialogsToClose);
+	LeaveCriticalSection(&m_pImpl->lock);
+	return out;
+}
+
+int ClaudeBridge::CountUnread()
+{
+	int n = 0;
+	EnterCriticalSection(&m_pImpl->lock);
+	for(size_t i = 0; i < m_pImpl->popups.size(); ++i)
+		if(!m_pImpl->popups[i].read) ++n;
+	LeaveCriticalSection(&m_pImpl->lock);
+	return n;
+}
+
+int ClaudeBridge::Acknowledge(const std::vector<int>* ids)
+{
+	int n = 0;
+	EnterCriticalSection(&m_pImpl->lock);
+	for(size_t i = 0; i < m_pImpl->popups.size(); ++i)
+	{
+		ClaudePopup& p = m_pImpl->popups[i];
+		if(p.read) continue;
+		bool bWanted = (ids == NULL);
+		for(size_t k = 0; !bWanted && k < ids->size(); ++k) bWanted = ((*ids)[k] == p.id);
+		if(!bWanted) continue;
+		p.read = true;
+		++n;
+		if(!p.dialog.empty()) m_pImpl->dialogsToClose += p.dialog + "\n";
+	}
+	LeaveCriticalSection(&m_pImpl->lock);
+	return n;
+}
+
+std::vector<ClaudePopup> ClaudeBridge::GetPopupsSince(int iTurn)
+{
+	std::vector<ClaudePopup> out;
+	EnterCriticalSection(&m_pImpl->lock);
+	for(size_t i = 0; i < m_pImpl->popups.size(); ++i)
+		if(m_pImpl->popups[i].turn >= iTurn || !m_pImpl->popups[i].read) out.push_back(m_pImpl->popups[i]);
+	LeaveCriticalSection(&m_pImpl->lock);
+	return out;
+}
+
 ClaudeBridge::Impl::Impl()
-	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), logSeq(0), lastLogTurn(-1),
+	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), logSeq(0), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0), gameTurn(-1),
 	  shuttingDown(false), myTurn(false), lastTickMs(0)
 {
 	InitializeCriticalSection(&lock);
 }
 
 ClaudeBridge::Impl::~Impl()
+{
+	Shutdown(); // last resort if the DLL's Uninit never ran
+	DeleteCriticalSection(&lock);
+}
+
+// Static destruction runs under the loader lock while the DLL unloads; the HTTP
+// thread can never finish exiting then, the join times out and the thread is
+// left running in unmapped code. So the game thread calls this first.
+void ClaudeBridge::Impl::Shutdown()
 {
 	shuttingDown = true;
 	if(pServer)
@@ -151,8 +239,8 @@ ClaudeBridge::Impl::~Impl()
 
 		pServer->Stop(CLAUDE_JOB_TIMEOUT_MS + 5000);
 		delete pServer;
+		pServer = NULL;
 	}
-	DeleteCriticalSection(&lock);
 }
 
 void ClaudeBridge::Impl::TryStart()
@@ -161,6 +249,7 @@ void ClaudeBridge::Impl::TryStart()
 	if(lastStartAttemptMs != 0 && now - lastStartAttemptMs < CLAUDE_START_RETRY_MS) return;
 	lastStartAttemptMs = now;
 
+	shuttingDown = false;
 	pServer = new ClaudeHttpServer();
 	if(pServer->Start(CLAUDE_PORT, &Impl::HttpHandler))
 	{
@@ -189,7 +278,11 @@ void ClaudeBridge::Impl::Tick()
 	DWORD now = GetTickCount();
 	lastTickMs = (now == 0) ? 1 : now;
 	if(pServer == NULL) TryStart();
+	int iTurn = GC.getGame().getGameTurn();
+	if(CvPreGame::mapRandomSeed() != gameSeed || iTurn < gameTurn) ResetForNewGame();
+	gameTurn = iTurn;
 	UpdateTurnFlags();
+	DrainPopups();
 
 	for(;;)
 	{
@@ -213,6 +306,60 @@ void ClaudeBridge::Impl::Tick()
 		LeaveCriticalSection(&lock);
 		if(bAbandoned) delete pJob;
 	}
+}
+
+void ClaudeBridge::Impl::DrainPopups()
+{
+	std::vector<ClaudePendingPopup> pending;
+	EnterCriticalSection(&lock);
+	pending.swap(pendingPopups);
+	int iLost = pendingDropped;
+	pendingDropped = 0;
+	LeaveCriticalSection(&lock);
+	if(iLost > 0) LogLine(ClaudeFormat("[bridge] %d game message(s) were lost: more than %d arrived before the game thread read them", iLost, CLAUDE_MAX_POPUPS));
+	for(size_t i = 0; i < pending.size(); ++i)
+	{
+		const ClaudePendingPopup& p = pending[i];
+		ClaudePopup popup;
+		popup.turn = GC.getGame().getGameTurn();
+		popup.dialog = ClaudePopupDialogToClose(p.type);
+		popup.text = ClaudeDescribePopup(p.type, p.data1, p.data2, p.data3, p.option1, p.text);
+		if(popup.text.empty())
+		{
+			if(popup.dialog.empty()) continue;
+			popup.text = "The game showed a " + popup.dialog + " dialog with no text";
+		}
+		popup.read = false;
+		int iDroppedUnread = 0;
+		EnterCriticalSection(&lock);
+		popup.id = ++popupSeq;
+		popups.push_back(popup);
+		if(popups.size() > CLAUDE_MAX_POPUPS)
+		{
+			size_t excess = popups.size() - CLAUDE_MAX_POPUPS;
+			for(size_t k = 0; k < excess; ++k)
+			{
+				if(popups[k].read) continue;
+				++iDroppedUnread;
+				if(!popups[k].dialog.empty()) dialogsToClose += popups[k].dialog + "\n";
+			}
+			popups.erase(popups.begin(), popups.begin() + excess);
+		}
+		LeaveCriticalSection(&lock);
+		if(iDroppedUnread > 0) LogLine(ClaudeFormat("[bridge] %d unread game message(s) dropped: more than %d were kept", iDroppedUnread, CLAUDE_MAX_POPUPS));
+		LogLine(ClaudeFormat("[game #%d] ", popup.id) + popup.text);
+	}
+}
+
+// Keeps pendingPopups: the UI may already have reported the new game's first popups.
+void ClaudeBridge::Impl::ResetForNewGame()
+{
+	EnterCriticalSection(&lock);
+	gameSeed = CvPreGame::mapRandomSeed();
+	popups.clear();
+	popupSeq = 0;
+	dialogsToClose.clear();
+	LeaveCriticalSection(&lock);
 }
 
 void ClaudeBridge::Impl::RunJob(ClaudeJob* pJob)
@@ -355,7 +502,9 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bo
 		result["serverInfo"] = picojson::value(info);
 		result["instructions"] = picojson::value(
 		    "You are playing Civilization V as the active human player. Call wait_for_my_turn until it is your turn, "
-		    "then use the query tools, act, write your reasoning with log, and finish with end_turn.");
+		    "then use the query tools, act, write your reasoning with log, and finish with end_turn. "
+		    "A unit with a queued multi-turn move is still where it stopped when your next turn opens; it moves when you call end_turn, "
+		    "as for a human clicking End Turn. Leave it alone unless you want it to go somewhere else.");
 		return JsonRpcResponse(id, picojson::value(result));
 	}
 
@@ -423,6 +572,12 @@ picojson::value ClaudeBridge::Impl::CallTool(const std::string& name, const pico
 	{
 		bIsError = true;
 		return picojson::value("unknown tool: " + name);
+	}
+	std::string argError = ClaudeCheckArgs(*pTool, args);
+	if(!argError.empty())
+	{
+		bIsError = true;
+		return picojson::value(argError);
 	}
 
 	if(pTool->waitsForTurn)

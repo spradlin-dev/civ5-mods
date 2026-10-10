@@ -1,0 +1,41 @@
+#pragma once
+
+#include <string>
+#include "picojson.h"
+
+// Tool handlers, one per MCP tool, registered in ClaudeTools.cpp. All run on the game thread.
+#define CLAUDE_TOOL(name) picojson::value name(const picojson::object& args, std::string& err)
+
+// ClaudeTools.cpp
+CLAUDE_TOOL(ToolStatus);
+CLAUDE_TOOL(ToolOverview);
+CLAUDE_TOOL(ToolUnits);
+CLAUDE_TOOL(ToolUnitOptions);
+CLAUDE_TOOL(ToolCities);
+CLAUDE_TOOL(ToolCityOptions);
+CLAUDE_TOOL(ToolMap);
+CLAUDE_TOOL(ToolResearchOptions);
+CLAUDE_TOOL(ToolMoveUnit);
+CLAUDE_TOOL(ToolUnitAction);
+CLAUDE_TOOL(ToolSetProduction);
+CLAUDE_TOOL(ToolSetResearch);
+CLAUDE_TOOL(ToolEndTurn);
+CLAUDE_TOOL(ToolLog);
+CLAUDE_TOOL(ToolAcknowledgeMessages);
+
+// ClaudeBriefing.cpp
+CLAUDE_TOOL(ToolBriefing);
+CLAUDE_TOOL(ToolCivs);
+CLAUDE_TOOL(ToolLookup);
+
+// ClaudeActions.cpp
+CLAUDE_TOOL(ToolPolicyOptions);
+CLAUDE_TOOL(ToolAdoptPolicy);
+CLAUDE_TOOL(ToolPromoteUnit);
+CLAUDE_TOOL(ToolUpgradeUnit);
+CLAUDE_TOOL(ToolAttack);
+CLAUDE_TOOL(ToolCityAttack);
+CLAUDE_TOOL(ToolBuy);
+CLAUDE_TOOL(ToolBuyTile);
+CLAUDE_TOOL(ToolSetCityFocus);
+CLAUDE_TOOL(ToolDeclareWar);
