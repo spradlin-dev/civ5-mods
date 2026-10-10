@@ -22,6 +22,7 @@
 #include "CvLuaLeague.h"
 
 #include "../CvGame.h"
+#include "../Claude/ClaudeBridge.h"
 #include "../CvGameCoreUtils.h"
 #include "../CvInternalGameCoreUtils.h"
 #include "../CvGameTextMgr.h"
@@ -96,6 +97,7 @@ void CvLuaGame::RegisterMembers(lua_State* L)
 	Method(GetNumHumanPlayers);
 	Method(GetNumSequentialHumans);
 	Method(GetGameTurn);
+	Method(GetClaudeLog);
 	Method(SetGameTurn);
 	Method(GetTurnYear);
 	Method(GetGameTurnYear);
@@ -705,6 +707,16 @@ int CvLuaGame::lGetNumSequentialHumans(lua_State* L)
 int CvLuaGame::lGetGameTurn(lua_State* L)
 {
 	return BasicLuaMethod(L, &CvGame::getGameTurn);
+}
+//------------------------------------------------------------------------------
+//int, string GetClaudeLog();
+int CvLuaGame::lGetClaudeLog(lua_State* L)
+{
+	std::string text;
+	int seq = ClaudeBridge::Get().GetLogText(text);
+	lua_pushinteger(L, seq);
+	lua_pushlstring(L, text.data(), text.size());
+	return 2;
 }
 //------------------------------------------------------------------------------
 //void setGameTurn(int iNewValue);

@@ -7,6 +7,7 @@
 	------------------------------------------------------------------------------------------------------- */
 
 #include "CvGameCoreDLLPCH.h"
+#include "Claude/ClaudeBridge.h"
 #include "CvGameCoreUtils.h"
 #include "CvInternalGameCoreUtils.h"
 #include "CvGame.h"
@@ -159,11 +160,6 @@ CvGame::~CvGame()
 //	--------------------------------------------------------------------------------
 void CvGame::init(HandicapTypes eHandicap)
 {
-	if(FILogFile* pLog = LOGFILEMGR.GetLog("ClaudePlayer.log", FILogFile::kDontTimeStamp))
-	{
-		pLog->Msg("Claude Player DLL loaded: CvGame::init");
-	}
-
 	bool bValid;
 	int iStartTurn;
 	int iEstimateEndTurn;
@@ -1421,6 +1417,8 @@ void CvGame::assignStartingPlots()
 //	---------------------------------------------------------------------------
 void CvGame::update()
 {
+	ClaudeBridge::Get().Tick();
+
 	if(IsWaitingForBlockingInput())
 	{
 		if(!GC.GetEngineUserInterface()->isDiploActive())

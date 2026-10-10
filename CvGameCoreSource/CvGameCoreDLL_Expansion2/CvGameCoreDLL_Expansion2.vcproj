@@ -71,7 +71,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="CvWorldBuilderMapWin32.lib CvGameCoreDLLUtilWin32.lib CvLocalizationWin32.lib CvGameDatabaseWin32.lib FireWorksWin32.lib FLuaWin32.lib lua51_Win32.lib winmm.lib"
+				AdditionalDependencies="CvWorldBuilderMapWin32.lib CvGameCoreDLLUtilWin32.lib CvLocalizationWin32.lib CvGameDatabaseWin32.lib FireWorksWin32.lib FLuaWin32.lib lua51_Win32.lib winmm.lib ws2_32.lib"
 				OutputFile="$(OutDir)\$(ProjectName)$(PlatformName)$(ConfigurationName).dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="false"
@@ -257,6 +257,18 @@
 			</File>
 			<File
 				RelativePath=".\CvGame.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeBridge.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeTools.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeHttp.cpp"
 				>
 			</File>
 			<File
@@ -655,6 +667,22 @@
 			</File>
 			<File
 				RelativePath=".\CvGame.h"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeBridge.h"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeTools.h"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeHttp.h"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\picojson.h"
 				>
 			</File>
 			<File

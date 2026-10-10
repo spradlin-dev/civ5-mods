@@ -88,6 +88,7 @@ protected:
 	static int lGetNumHumanPlayers(lua_State* L);
 	static int lGetNumSequentialHumans(lua_State* L);
 	static int lGetGameTurn(lua_State* L);
+	static int lGetClaudeLog(lua_State* L);
 	static int lSetGameTurn(lua_State* L);
 	static int lGetTurnYear(lua_State* L);
 	static int lGetGameTurnYear(lua_State* L);
