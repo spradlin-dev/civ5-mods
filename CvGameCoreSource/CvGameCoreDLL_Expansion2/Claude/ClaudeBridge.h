@@ -38,12 +38,20 @@ public:
 	// even after old ones were trimmed.
 	int GetLogText(std::string& out);
 
-	// UI thread (Lua). Records a game popup; it is described and logged on the next Tick.
-	void NotePopup(int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text);
+	// Records a game popup; it is described and logged on the next Tick. bOnScreen
+	// means the game's dialog is open: it is Claude's only when Claude's seat is the
+	// player on screen, and is then closed once Claude has read it.
+	// UI thread (Lua) for on-screen popups, game thread otherwise.
+	void NotePopup(int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text, bool bOnScreen);
 
 	// UI thread (Lua). Dialog names whose messages were acknowledged since the last
 	// call, one per line; the Lua side closes them.
 	std::string TakeDialogsToClose();
+
+	// Testing only: enables the tools that drive the idle human's turn and closes
+	// that human's popups and leader screens unread. Off by default, reset every new game.
+	void SetTestingMode(bool bOn);
+	bool TestingMode() const;
 
 	// Game thread.
 	std::vector<ClaudePopup> GetPopupsSince(int iTurn);

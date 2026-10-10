@@ -79,6 +79,8 @@
 				ModuleDefinitionFile="$(ProjectDir)CvGameCoreDLL.def"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile="$(OutDir)/$(TargetName).pdb"
+				GenerateMapFile="true"
+				MapFileName="$(OutDir)/$(TargetName).map"
 				SubSystem="2"
 				LargeAddressAware="2"
 				OptimizeReferences="2"
@@ -281,6 +283,34 @@
 			</File>
 			<File
 				RelativePath=".\Claude\ClaudePopups.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeSeat.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeDiplomacy.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeReligion.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeCongress.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeEspionage.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeMinorCivs.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeCulture.cpp"
 				>
 			</File>
 			<File
@@ -703,6 +733,14 @@
 			</File>
 			<File
 				RelativePath=".\Claude\ClaudePopups.h"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeSeat.h"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeDiplomacy.h"
 				>
 			</File>
 			<File

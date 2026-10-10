@@ -36,6 +36,9 @@ namespace ClaudeTool
 	bool HasArg(const JObj& a, const char* k);
 
 	CvPlayer* Me(std::string& err);
+	// True when key names the entry by its type string or its displayed name.
+	bool MatchesKey(const char* szType, const char* szDescription, const std::string& key);
+	CvUnit* RequireUnit(CvPlayer* me, const JObj& args, std::string& err);
 	// Only while the turn is open; use for every tool that changes game state.
 	CvPlayer* MeActing(std::string& err);
 
@@ -76,6 +79,7 @@ namespace ClaudeTool
 	PolicyBranchTypes FindPolicyBranchType(const std::string& key);
 	ImprovementTypes FindImprovementType(const std::string& key);
 	ResourceTypes FindResourceType(const std::string& key);
+	ProjectTypes FindProjectType(const std::string& key);
 	// Matches a civilization's short name, player name, or numeric id as text.
 	PlayerTypes FindPlayer(const std::string& key);
 

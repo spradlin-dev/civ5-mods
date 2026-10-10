@@ -15,6 +15,7 @@
 #include "CvDllInterfaces.h"
 
 // Include this after all other headers.
+#include "Claude/ClaudeDiplomacy.h"
 #include "LintFree.h"
 
 /// Serialization read
@@ -222,6 +223,7 @@ bool CvDiplomacyRequests::HasActiveRequestFrom(PlayerTypes eFromPlayer) const
 // static
 void CvDiplomacyRequests::SendRequest(PlayerTypes eFromPlayer, PlayerTypes eToPlayer, DiploUIStateTypes eDiploType, const char* pszMessage, LeaderheadAnimationTypes eAnimationType, int iExtraGameData /*= -1*/)
 {
+	if(ClaudeInterceptRequest(eFromPlayer, eToPlayer, eDiploType, pszMessage, iExtraGameData)) return;
 	CvPlayer& kPlayer = GET_PLAYER(eToPlayer);
 	CvDiplomacyRequests* pkDiploRequests = kPlayer.GetDiplomacyRequests();
 	if(pkDiploRequests)
@@ -241,6 +243,7 @@ void CvDiplomacyRequests::SendRequest(PlayerTypes eFromPlayer, PlayerTypes eToPl
 //static
 void CvDiplomacyRequests::SendDealRequest(PlayerTypes eFromPlayer, PlayerTypes eToPlayer, CvDeal* pkDeal, DiploUIStateTypes eDiploType, const char* pszMessage, LeaderheadAnimationTypes eAnimationType)
 {
+	if(ClaudeInterceptDealRequest(eFromPlayer, eToPlayer, pkDeal, eDiploType, pszMessage)) return;
 	// Deals must currently happen on the active player's turn...
 	if(GC.getGame().getActivePlayer() == eToPlayer)
 	{

@@ -279,11 +279,11 @@ void CvDealAI::DoAcceptedDeal(PlayerTypes eFromPlayer, const CvDeal& kDeal, int 
 }
 
 /// Human making a demand of the AI
-DemandResponseTypes CvDealAI::DoHumanDemand(CvDeal* pDeal)
+DemandResponseTypes CvDealAI::DoHumanDemand(CvDeal* pDeal, PlayerTypes eFromPlayer)
 {
 	DemandResponseTypes eResponse = NO_DEMAND_RESPONSE_TYPE;
 
-	PlayerTypes eFromPlayer = GC.getGame().getActivePlayer();
+	if(eFromPlayer == NO_PLAYER) eFromPlayer = GC.getGame().getActivePlayer();
 	PlayerTypes eMyPlayer = GetPlayer()->GetID();
 
 	int iValueWillingToGiveUp = 0;
@@ -465,12 +465,20 @@ DemandResponseTypes CvDealAI::DoHumanDemand(CvDeal* pDeal)
 	}
 
 	// Have to sent AI response through the network  - it affects AI behavior
-	GC.getGame().DoFromUIDiploEvent(FROM_UI_DIPLO_EVENT_HUMAN_DEMAND, eMyPlayer, /*iData1*/ eResponse, -1);
+	if(eFromPlayer == GC.getGame().getActivePlayer())
+		GC.getGame().DoFromUIDiploEvent(FROM_UI_DIPLO_EVENT_HUMAN_DEMAND, eMyPlayer, /*iData1*/ eResponse, -1);
+	else
+		pDiploAI->DoFromUIDiploEvent(eFromPlayer, FROM_UI_DIPLO_EVENT_HUMAN_DEMAND, eResponse, -1);
 
 	// Demand agreed to
 	if(eResponse == DEMAND_RESPONSE_ACCEPT)
 	{
 		CvDeal kDeal = *pDeal;
+		if(eFromPlayer != GC.getGame().getActivePlayer())
+		{
+			DoAcceptedDemand(eFromPlayer, kDeal);
+			return eResponse;
+		}
 		//gDLL->sendNetDealAccepted(eFromPlayer, GetPlayer()->GetID(), kDeal, -1, -1, -1);
 		GC.GetEngineUserInterface()->SetDealInTransit(true);
 
@@ -589,7 +597,7 @@ bool CvDealAI::DoEqualizeDealWithHuman(CvDeal* pDeal, PlayerTypes eOtherPlayer, 
 	else
 	{
 		int iTotalValueToMe, iValueImOffering, iValueTheyreOffering, iAmountOverWeWillRequest, iAmountUnderWeWillOffer;
-		bMakeOffer = IsDealWithHumanAcceptable(pDeal, GC.getGame().getActivePlayer(), /*Passed by reference*/ iTotalValueToMe, iValueImOffering, iValueTheyreOffering, iAmountOverWeWillRequest, iAmountUnderWeWillOffer, bCantMatchOffer);
+		bMakeOffer = IsDealWithHumanAcceptable(pDeal, eOtherPlayer, /*Passed by reference*/ iTotalValueToMe, iValueImOffering, iValueTheyreOffering, iAmountOverWeWillRequest, iAmountUnderWeWillOffer, bCantMatchOffer);
 
 		if (iTotalValueToMe < 0 && bDontChangeTheirExistingItems)
 		{
@@ -652,7 +660,7 @@ bool CvDealAI::DoEqualizeDealWithHuman(CvDeal* pDeal, PlayerTypes eOtherPlayer, 
 			// Make sure we haven't removed everything from the deal!
 			if(pDeal->m_TradedItems.size() > 0)
 			{
-				bMakeOffer = IsDealWithHumanAcceptable(pDeal, GC.getGame().getActivePlayer(), /*Passed by reference*/ iTotalValueToMe, iValueImOffering, iValueTheyreOffering, iAmountOverWeWillRequest, iAmountUnderWeWillOffer, /*passed by reference*/bCantMatchOffer);
+				bMakeOffer = IsDealWithHumanAcceptable(pDeal, eOtherPlayer, /*Passed by reference*/ iTotalValueToMe, iValueImOffering, iValueTheyreOffering, iAmountOverWeWillRequest, iAmountUnderWeWillOffer, /*passed by reference*/bCantMatchOffer);
 			}
 		}
 	}

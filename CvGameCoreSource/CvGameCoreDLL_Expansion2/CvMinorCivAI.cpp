@@ -18,6 +18,7 @@
 #include "cvStopWatch.h"
 
 // must be included after all other headers
+#include "Claude/ClaudeSeat.h"
 #include "LintFree.h"
 
 //======================================================================================================
@@ -2172,6 +2173,9 @@ void CvMinorCivAI::DoFirstContactWithMajor(TeamTypes eTeam, bool bSuppressMessag
 
 				// See if there are any quests you can join now
 				DoTestQuestsOnFirstContact(ePlayer);
+
+				if(!bSuppressMessages)
+					ClaudeNoteSeatPopup(ePlayer, BUTTONPOPUP_CITY_STATE_GREETING, GetPlayer()->GetID(), iGoldGift, iFaithGift, bFirstMajorCiv, "");
 
 				// Greeting for active human player
 				if(ePlayer == GC.getGame().getActivePlayer() && !bSuppressMessages)

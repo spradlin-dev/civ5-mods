@@ -17,6 +17,7 @@
 #include "CvInfosSerializationHelper.h"
 
 // include after all other headers
+#include "Claude/ClaudeSeat.h"
 #include "LintFree.h"
 
 /// Constructor
@@ -2661,6 +2662,7 @@ void CvCityBuildings::SetNumRealBuildingTimed(BuildingTypes eIndex, int iNewValu
 						// Popup in SP games
 						else
 						{
+							ClaudeNoteSeatPopup(m_pCity->getOwner(), BUTTONPOPUP_WONDER_COMPLETED_ACTIVE_PLAYER, eIndex, 0, 0, false, "");
 							if(m_pCity->getOwner() == GC.getGame().getActivePlayer())
 							{
 								CvPopupInfo kPopup(BUTTONPOPUP_WONDER_COMPLETED_ACTIVE_PLAYER, eIndex);

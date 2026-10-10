@@ -16,6 +16,7 @@
 #include "cvStopWatch.h"
 
 // must be included after all other headers
+#include "Claude/ClaudeSeat.h"
 #include "LintFree.h"
 
 
@@ -2430,6 +2431,7 @@ void CvCityCitizens::DoSpawnGreatPerson(UnitTypes eUnit, bool bIncrementCount, b
 	if (eUnit == NO_UNIT)
 		return;	// Better than crashing.
 
+	ClaudeNoteSeatPopup(GetCity()->getOwner(), BUTTONPOPUP_GREAT_PERSON_REWARD, eUnit, GetCity()->GetID(), 0, false, "");
 	// If it's the active player then show the popup
 	if(GetCity()->getOwner() == GC.getGame().getActivePlayer())
 	{

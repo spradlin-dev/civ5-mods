@@ -1,6 +1,7 @@
 #include "CvGameCoreDLLPCH.h"
 #include "ClaudeTools.h"
 #include "ClaudeToolSupport.h"
+#include "ClaudeSeat.h"
 #include "ClaudeToolHandlers.h"
 #include "ClaudeBridge.h"
 #include "../CvGame.h"
@@ -34,6 +35,7 @@ CLAUDE_TOOL(ToolStatus)
 	o["max_turns"] = J(g.getMaxTurns());
 	o["player_id"] = J((int)me->GetID());
 	o["player_name"] = J(me->getName());
+	o["alive"] = J(me->isAlive());
 	o["civilization"] = J(me->getCivilizationShortDescription());
 	CvLeaderHeadInfo* pLeader = GC.getLeaderHeadInfo(me->getLeaderType());
 	o["leader"] = J(pLeader ? pLeader->GetDescription() : "");
@@ -41,6 +43,7 @@ CLAUDE_TOOL(ToolStatus)
 	o["ai_processing"] = J(AiProcessing());
 	o["end_turn_blocking"] = J(BlockingName(EndTurnBlocking(me)));
 	o["units_needing_orders"] = J(me->GetCountReadyUnits());
+	o["seat"] = J(ClaudeSeatOnScreen() ? "on screen: the human player's own civilization" : "claimed: off screen, the human on screen plays another civilization");
 	return JVal(o);
 }
 
@@ -125,10 +128,8 @@ CLAUDE_TOOL(ToolUnitOptions)
 {
 	CvPlayer* me = Me(err);
 	if(!me) return JVal();
-	int iUnit = 0;
-	if(!RequireInt(args, "unit_id", iUnit, err)) return JVal();
-	CvUnit* u = me->getUnit(iUnit);
-	if(!u) { err = "no unit with that id"; return JVal(); }
+	CvUnit* u = RequireUnit(me, args, err);
+	if(!u) return JVal();
 	CvPlot* p = u->plot();
 	JObj o;
 	o["unit"] = UnitJson(u);
@@ -202,7 +203,8 @@ CLAUDE_TOOL(ToolCityOptions)
 		UnitTypes e = (UnitTypes)i;
 		bool bTrain = c->canTrain(e);
 		bool bBuy = c->IsCanPurchase(false, true, e, NO_BUILDING, NO_PROJECT, YIELD_GOLD);
-		if(!bTrain && !bBuy) continue;
+		bool bBuyFaith = c->IsCanPurchase(false, true, e, NO_BUILDING, NO_PROJECT, YIELD_FAITH);
+		if(!bTrain && !bBuy && !bBuyFaith) continue;
 		CvUnitEntry* info = GC.getUnitInfo(e);
 		JObj u;
 		u["type"] = J(info->GetType());
@@ -213,6 +215,7 @@ CLAUDE_TOOL(ToolCityOptions)
 			u["turns"] = J(c->getProductionTurnsLeft(e, 0));
 		}
 		if(bBuy) u["buy_gold"] = J(c->GetPurchaseCost(e));
+		if(bBuyFaith) u["buy_faith"] = J(c->GetFaithPurchaseCost(e, true));
 		if(info->GetCombat() > 0) u["strength"] = J(info->GetCombat());
 		if(info->GetRangedCombat() > 0) u["ranged_strength"] = J(info->GetRangedCombat());
 		u["moves"] = J(info->GetMoves());
@@ -225,7 +228,8 @@ CLAUDE_TOOL(ToolCityOptions)
 		BuildingTypes e = (BuildingTypes)i;
 		bool bBuild = c->canConstruct(e);
 		bool bBuy = c->IsCanPurchase(false, true, NO_UNIT, e, NO_PROJECT, YIELD_GOLD);
-		if(!bBuild && !bBuy) continue;
+		bool bBuyFaith = c->IsCanPurchase(false, true, NO_UNIT, e, NO_PROJECT, YIELD_FAITH);
+		if(!bBuild && !bBuy && !bBuyFaith) continue;
 		CvBuildingEntry* info = GC.getBuildingInfo(e);
 		JObj b;
 		b["type"] = J(info->GetType());
@@ -236,9 +240,24 @@ CLAUDE_TOOL(ToolCityOptions)
 			b["turns"] = J(c->getProductionTurnsLeft(e, 0));
 		}
 		if(bBuy) b["buy_gold"] = J(c->GetPurchaseCost(e));
+		if(bBuyFaith) b["buy_faith"] = J(c->GetFaithPurchaseCost(e));
 		buildings.push_back(JVal(b));
 	}
 	o["buildings"] = JVal(buildings);
+	JArr projects;
+	for(int i = 0; i < GC.getNumProjectInfos(); ++i)
+	{
+		ProjectTypes e = (ProjectTypes)i;
+		if(!c->canCreate(e)) continue;
+		CvProjectEntry* info = GC.getProjectInfo(e);
+		JObj pj;
+		pj["type"] = J(info->GetType());
+		pj["name"] = J(info->GetDescription());
+		pj["cost"] = J(c->getProductionNeeded(e));
+		projects.push_back(JVal(pj));
+	}
+	if(!projects.empty()) o["projects"] = JVal(projects);
+	o["faith"] = J(me->GetFaith());
 
 	JArr tiles;
 	for(int dy = -3; dy <= 3; ++dy)
@@ -343,10 +362,9 @@ CLAUDE_TOOL(ToolMoveUnit)
 {
 	CvPlayer* me = MeActing(err);
 	if(!me) return JVal();
-	int iUnit = 0, x = 0, y = 0;
-	if(!RequireInt(args, "unit_id", iUnit, err) || !RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
-	CvUnit* u = me->getUnit(iUnit);
-	if(!u) { err = "no unit with that id"; return JVal(); }
+	int x = 0, y = 0;
+	CvUnit* u = RequireUnit(me, args, err);
+	if(!u || !RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
 	CvMap& map = GC.getMap();
 	if(x < 0 || y < 0 || x >= map.getGridWidth() || y >= map.getGridHeight()) { err = "destination is off the map"; return JVal(); }
 	CvPlot* dest = map.plot(x, y);
@@ -391,10 +409,8 @@ CLAUDE_TOOL(ToolUnitAction)
 {
 	CvPlayer* me = MeActing(err);
 	if(!me) return JVal();
-	int iUnit = 0;
-	if(!RequireInt(args, "unit_id", iUnit, err)) return JVal();
-	CvUnit* u = me->getUnit(iUnit);
-	if(!u) { err = "no unit with that id"; return JVal(); }
+	CvUnit* u = RequireUnit(me, args, err);
+	if(!u) return JVal();
 	CvPlot* p = u->plot();
 	std::string action = ArgStr(args, "action");
 	JObj o;
@@ -409,6 +425,27 @@ CLAUDE_TOOL(ToolUnitAction)
 		u->PushMission(CvTypes::getMISSION_BUILD(), eBuild);
 		o["ok"] = J(true);
 		o["unit"] = UnitJson(u);
+		return JVal(o);
+	}
+
+	if(action == "rebase")
+	{
+		int x = 0, y = 0;
+		if(!RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
+		if(!u->canRebaseAt(p, x, y)) { err = "this unit cannot rebase there (not an aircraft, out of range, or no city or carrier of yours at the tile)"; return JVal(); }
+		NetMessageScope scope;
+		u->PushMission(CvTypes::getMISSION_REBASE(), x, y);
+		o["ok"] = J(true);
+		o["unit"] = UnitJson(u);
+		return JVal(o);
+	}
+	if(action == "disband")
+	{
+		if(!u->canScrap()) { err = "this unit cannot be disbanded right now"; return JVal(); }
+		std::string name = UnitTypeName(u->getUnitType());
+		u->scrap();
+		o["ok"] = J(true);
+		o["disbanded"] = J(name);
 		return JVal(o);
 	}
 
@@ -436,7 +473,7 @@ CLAUDE_TOOL(ToolUnitAction)
 		return JVal(o);
 	}
 
-	err = "unknown action '" + action + "'; use one of " + UnitActionNames() + ", or build";
+	err = "unknown action '" + action + "'; use one of " + UnitActionNames() + ", build, rebase or disband";
 	return JVal();
 }
 
@@ -453,6 +490,7 @@ CLAUDE_TOOL(ToolSetProduction)
 
 	UnitTypes eUnit = FindUnitType(item);
 	BuildingTypes eBuilding = (eUnit == NO_UNIT) ? FindBuildingType(item) : NO_BUILDING;
+	ProjectTypes eProject = (eUnit == NO_UNIT && eBuilding == NO_BUILDING) ? FindProjectType(item) : NO_PROJECT;
 	if(eUnit != NO_UNIT)
 	{
 		if(!c->canTrain(eUnit)) { err = "this city cannot train " + item + " right now"; return JVal(); }
@@ -463,9 +501,14 @@ CLAUDE_TOOL(ToolSetProduction)
 		if(!c->canConstruct(eBuilding)) { err = "this city cannot build " + item + " right now"; return JVal(); }
 		c->pushOrder(ORDER_CONSTRUCT, eBuilding, -1, false, !bAppend, bAppend);
 	}
+	else if(eProject != NO_PROJECT)
+	{
+		if(!c->canCreate(eProject)) { err = "this city cannot work on " + item + " right now"; return JVal(); }
+		c->pushOrder(ORDER_CREATE, eProject, -1, false, !bAppend, bAppend);
+	}
 	else
 	{
-		err = "unknown item '" + item + "'; use a type from city_options such as UNIT_WARRIOR or BUILDING_MONUMENT";
+		err = "unknown item '" + item + "'; use a type from city_options such as UNIT_WARRIOR, BUILDING_MONUMENT or PROJECT_APOLLO_PROGRAM";
 		return JVal();
 	}
 	JObj o;
@@ -480,7 +523,7 @@ CLAUDE_TOOL(ToolSetResearch)
 	if(!me) return JVal();
 	std::string key = ArgStr(args, "tech");
 	TechTypes eTech = FindTechType(key);
-	if(eTech == NO_TECH) { err = "unknown tech '" + key + "'; use a type from research_options such as TECH_POTTERY"; return JVal(); }
+	if(eTech == NO_TECH) { err = "unknown tech '" + key + "'; use a name or type from research_options"; return JVal(); }
 	JObj o;
 	if(me->GetNumFreeTechs() > 0)
 	{
@@ -514,15 +557,23 @@ CLAUDE_TOOL(ToolEndTurn)
 		err = "end of turn blocked - " + BlockingName(eBlock);
 		return JVal();
 	}
-	if(AiProcessing())
+	if(ClaudeSeatOnScreen() && AiProcessing())
 	{
 		err = "the game is still processing other civilizations; wait a moment and try again";
 		return JVal();
 	}
 	if(bIdleUnits) me->EndTurnsForReadyUnits();
-	if(!g.isNetworkMultiPlayer() && GC.GetPostTurnAutosaves())
-		gDLL->AutoSave(false, true);
-	gDLL->sendTurnComplete();
+	if(ClaudeSeatOnScreen())
+	{
+		if(!g.isNetworkMultiPlayer() && GC.GetPostTurnAutosaves())
+			gDLL->AutoSave(false, true);
+		gDLL->sendTurnComplete();
+	}
+	else
+	{
+		me->setEndTurn(true);
+		if(!me->isEndTurn()) { err = "a unit or city is still busy; call end_turn again in a moment"; return JVal(); }
+	}
 	JObj o;
 	o["ok"] = J(true);
 	o["ended_turn"] = J(g.getGameTurn());
@@ -554,6 +605,53 @@ CLAUDE_TOOL(ToolAcknowledgeMessages)
 	return JVal(o);
 }
 
+CLAUDE_TOOL(ToolTakeSeat)
+{
+	std::string key = ArgStr(args, "civ");
+	PlayerTypes e = FindPlayer(key);
+	if(e == NO_PLAYER) { err = "unknown civilization '" + key + "'; use a name from civs"; return JVal(); }
+	if(!ClaudeClaimSeat(e, err)) return JVal();
+	JObj o;
+	o["ok"] = J(true);
+	o["playing"] = J(CivName(e));
+	o["next"] = J("call wait_for_my_turn; your turn comes after the human's each round");
+	return JVal(o);
+}
+
+CLAUDE_TOOL(ToolReleaseSeat)
+{
+	if(!ClaudeReleaseSeat(err)) return JVal();
+	JObj o;
+	o["ok"] = J(true);
+	return JVal(o);
+}
+
+CLAUDE_TOOL(ToolSkipHumanTurn)
+{
+	if(!ClaudeBridge::Get().TestingMode()) { err = "skip_human_turn is a testing tool: call testing_mode with enabled=true first"; return JVal(); }
+	PlayerTypes e = GC.getGame().getActivePlayer();
+	if(e == NO_PLAYER || !GET_PLAYER(e).isHuman()) { err = "no human player is on screen"; return JVal(); }
+	if(ClaudeSeatOnScreen()) { err = "the player on screen is your own seat; use end_turn"; return JVal(); }
+	CvPlayer& p = GET_PLAYER(e);
+	if(!ClaudeIsPlayerTurn(p)) { err = "it is not the screen player's turn right now"; return JVal(); }
+	p.EndTurnsForReadyUnits();
+	gDLL->sendTurnComplete();
+	JObj o;
+	o["ok"] = J(true);
+	o["skipped_turn_of"] = J(CivName(e));
+	return JVal(o);
+}
+
+CLAUDE_TOOL(ToolTestingMode)
+{
+	bool bOn = ArgBool(args, "enabled", false);
+	ClaudeBridge::Get().SetTestingMode(bOn);
+	JObj o;
+	o["ok"] = J(true);
+	o["enabled"] = J(bOn);
+	return JVal(o);
+}
+
 CLAUDE_TOOL(ToolLog)
 {
 	std::string text = ArgStr(args, "text");
@@ -576,7 +674,7 @@ namespace
 
 	const ClaudeToolDef TOOLS[] =
 	{
-		{ "status",
+		{ CLAUDE_TOOL_STATUS,
 		  "Current turn, who you are, whether it is your turn, and what blocks ending it. Cheap; call it freely.",
 		  SCHEMA_EMPTY, ToolStatus, false, false },
 		{ "wait_for_my_turn",
@@ -598,7 +696,7 @@ namespace
 		  "All your cities: population, growth, production, focus and per-turn yields.",
 		  SCHEMA_EMPTY, ToolCities, false, false },
 		{ "city_options",
-		  "Everything one city can build or buy right now (units and buildings with production cost, turns and gold price) and the tiles it can buy. Use the type strings with set_production or buy.",
+		  "Everything one city can build or buy right now: units, buildings and projects with production cost and turns, gold and faith prices, and the tiles it can buy. Use the type strings with set_production or buy.",
 		  SCHEMA_CITY, ToolCityOptions, false, false },
 		{ "map",
 		  "Explored tiles within radius (default 3, max 8) of a point (default: your capital). Hex grid with offset rows: odd rows sit half a tile east of even rows, so use the dist field rather than computing distances. Unexplored tiles are counted, not listed. Only visible_now tiles show units.",
@@ -619,8 +717,8 @@ namespace
 		  "Order a unit to move to a tile. Multi-turn moves continue when you end each turn (the unit is still in place when your next turn opens); do not re-issue them. Fails with a reason if there is no path. To attack, use attack.",
 		  SCHEMA_UNIT_XY, ToolMoveUnit, true, false },
 		{ "unit_action",
-		  "Give a unit an order on its current tile. action is one of the names unit_options lists under actions, or build (with build=BUILD_... from builds_here).",
-		  "{\"type\":\"object\",\"properties\":{\"unit_id\":{\"type\":\"integer\"},\"action\":{\"type\":\"string\"},\"build\":{\"type\":\"string\"}},\"required\":[\"unit_id\",\"action\"]}", ToolUnitAction, true, false },
+		  "Give a unit an order on its current tile. action is one of the names unit_options lists under actions, build (with build=BUILD_... from builds_here), rebase (aircraft, with x and y of one of your cities or carriers), or disband.",
+		  "{\"type\":\"object\",\"properties\":{\"unit_id\":{\"type\":\"integer\"},\"action\":{\"type\":\"string\"},\"build\":{\"type\":\"string\"},\"x\":{\"type\":\"integer\"},\"y\":{\"type\":\"integer\"}},\"required\":[\"unit_id\",\"action\"]}", ToolUnitAction, true, false },
 		{ "attack",
 		  "Attack the enemy unit or city on a tile with one of your units (melee needs to be adjacent; ranged units strike from range). Returns the game's own damage estimate; pass preview_only=true to see the estimate without attacking.",
 		  "{\"type\":\"object\",\"properties\":{\"unit_id\":{\"type\":\"integer\"},\"x\":{\"type\":\"integer\"},\"y\":{\"type\":\"integer\"},\"preview_only\":{\"type\":\"boolean\"}},\"required\":[\"unit_id\",\"x\",\"y\"]}", ToolAttack, true, false },
@@ -637,8 +735,8 @@ namespace
 		  "Set what a city builds. item is a type string from city_options (UNIT_... or BUILDING_...). Replaces the current item unless append=true, which adds it to the end of the queue.",
 		  "{\"type\":\"object\",\"properties\":{\"city_id\":{\"type\":\"integer\"},\"item\":{\"type\":\"string\"},\"append\":{\"type\":\"boolean\"}},\"required\":[\"city_id\",\"item\"]}", ToolSetProduction, true, false },
 		{ "buy",
-		  "Buy a unit or building in a city with gold (item type from city_options; the price is buy_gold).",
-		  "{\"type\":\"object\",\"properties\":{\"city_id\":{\"type\":\"integer\"},\"item\":{\"type\":\"string\"}},\"required\":[\"city_id\",\"item\"]}", ToolBuy, true, false },
+		  "Buy a unit or building in a city with gold (item type from city_options; the price is buy_gold), or with faith when with_faith=true (price buy_faith).",
+		  "{\"type\":\"object\",\"properties\":{\"city_id\":{\"type\":\"integer\"},\"item\":{\"type\":\"string\"},\"with_faith\":{\"type\":\"boolean\"}},\"required\":[\"city_id\",\"item\"]}", ToolBuy, true, false },
 		{ "buy_tile",
 		  "Buy a tile for a city with gold (tiles and prices from city_options.buyable_tiles).",
 		  SCHEMA_CITY_XY, ToolBuyTile, true, false },
@@ -654,12 +752,97 @@ namespace
 		{ "declare_war",
 		  "Declare war on a civilization or city-state (by name from civs). Irreversible for many turns; be sure.",
 		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"}},\"required\":[\"civ\"]}", ToolDeclareWar, true, false },
-		{ "end_turn",
+		{ CLAUDE_TOOL_END_TURN,
 		  "End your turn, after reading the briefing and giving orders. Refused while a decision is pending (research, production, policy...). If units still await orders it is refused too, unless force=true, which makes them skip this turn.",
 		  "{\"type\":\"object\",\"properties\":{\"force\":{\"type\":\"boolean\"}}}", ToolEndTurn, true, false },
 		{ "acknowledge_messages",
 		  "Confirm you have read game messages (briefing.game_messages entries with unread=true). Actions are refused while any are unread. ids lists specific message ids; omit it to acknowledge all. Informational dialogs close in the game once acknowledged.",
 		  "{\"type\":\"object\",\"properties\":{\"ids\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}}}", ToolAcknowledgeMessages, true, false },
+		{ "diplomacy",
+		  "Relations with every civilization you have met (war, embassies, open borders, pacts, friendship), the deals in force, and requests from other leaders waiting for your answer. Requests are kept in memory only: they do not survive a game reload.",
+		  SCHEMA_EMPTY, ToolDiplomacy, false, false },
+		{ "respond_to_request",
+		  "Answer a request from another leader (id and choices from diplomacy.requests or briefing.diplomacy_requests). Deal offers take accept or decline; warnings take the listed choices; statements take acknowledge.",
+		  "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"choice\":{\"type\":\"string\"}},\"required\":[\"id\",\"choice\"]}", ToolRespondToRequest, true, false },
+		{ "propose_deal",
+		  "Offer a deal to a civilization. give and get are lists of items: {item: gold|gold_per_turn|resource|open_borders|embassy|defensive_pact|research_agreement|maps|declaration_of_friendship|city|third_party_war|third_party_peace, amount, resource, city_id, civ}. With preview_only=true you learn whether the game's AI would accept and what would make it work, without proposing. A human decides on their own trade screen.",
+		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"},\"give\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"get\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"preview_only\":{\"type\":\"boolean\"}},\"required\":[\"civ\"]}", ToolProposeDeal, true, false },
+		{ "make_peace",
+		  "Negotiate peace with a civilization you are at war with. The game's AI sets the terms it will accept (white peace, or a surrender one way or the other); preview_only=true shows them without agreeing.",
+		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"},\"preview_only\":{\"type\":\"boolean\"}},\"required\":[\"civ\"]}", ToolMakePeace, true, false },
+		{ "demand",
+		  "Demand tribute from an AI civilization: get lists the items (as in propose_deal). They give in only if they fear you; refusals sour relations.",
+		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"},\"get\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}}},\"required\":[\"civ\",\"get\"]}", ToolDemand, true, false },
+		{ "discuss",
+		  "Talk to a leader: topic is ask_friendship, end_friendship, denounce, stop_settling, stop_spying, stop_converting, stop_digging or joint_war (with target: the civilization to fight).",
+		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"},\"topic\":{\"type\":\"string\"},\"target\":{\"type\":\"string\"}},\"required\":[\"civ\",\"topic\"]}", ToolDiscuss, true, false },
+		{ "religion_options",
+		  "Your faith, pantheon and religion, and every religious choice waiting for you: pantheon beliefs, founding or enhancing a religion, reformation beliefs, and great people to claim (faith, free or Maya).",
+		  SCHEMA_EMPTY, ToolReligionOptions, false, false },
+		{ "found_pantheon", "Found your pantheon with a belief from religion_options.",
+		  "{\"type\":\"object\",\"properties\":{\"belief\":{\"type\":\"string\"}},\"required\":[\"belief\"]}", ToolFoundPantheon, true, false },
+		{ "found_religion", "Found a religion once a Great Prophet has started it (unit_action found_religion): religion, beliefs [founder, follower] and optionally name and city_id for the holy city.",
+		  "{\"type\":\"object\",\"properties\":{\"religion\":{\"type\":\"string\"},\"beliefs\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"name\":{\"type\":\"string\"},\"city_id\":{\"type\":\"integer\"}},\"required\":[\"religion\",\"beliefs\"]}", ToolFoundReligion, true, false },
+		{ "enhance_religion", "Enhance your religion with beliefs [follower, enhancer] after a Great Prophet started it (unit_action enhance_religion).",
+		  "{\"type\":\"object\",\"properties\":{\"beliefs\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"beliefs\"]}", ToolEnhanceReligion, true, false },
+		{ "add_reformation_belief", "Add the reformation belief your religion has earned.",
+		  "{\"type\":\"object\",\"properties\":{\"belief\":{\"type\":\"string\"}},\"required\":[\"belief\"]}", ToolAddReformationBelief, true, false },
+		{ "choose_great_person", "Claim a great person you are owed: unit is a great person type from religion_options, source is faith, free or maya.",
+		  "{\"type\":\"object\",\"properties\":{\"unit\":{\"type\":\"string\"},\"source\":{\"type\":\"string\"}},\"required\":[\"unit\",\"source\"]}", ToolChooseGreatPerson, true, false },
+		{ "congress", "The World Congress: session timing, your votes and proposals, resolutions in force, proposals awaiting votes with their choices, and what you can propose.",
+		  SCHEMA_EMPTY, ToolCongress, false, false },
+		{ "propose_resolution", "Propose a resolution (resolution type from congress with a choice where one is needed) or a repeal (repeal_id).",
+		  "{\"type\":\"object\",\"properties\":{\"resolution\":{\"type\":\"string\"},\"choice\":{},\"repeal_id\":{\"type\":\"integer\"}}}", ToolProposeResolution, true, false },
+		{ "vote_resolution", "Cast votes on a proposal awaiting votes: resolution_id, choice (number or text from congress) and votes (default: all remaining).",
+		  "{\"type\":\"object\",\"properties\":{\"resolution_id\":{\"type\":\"integer\"},\"choice\":{},\"votes\":{\"type\":\"integer\"}},\"required\":[\"resolution_id\"]}", ToolVoteResolution, true, false },
+		{ "abstain", "Abstain with some or all of your remaining votes.",
+		  "{\"type\":\"object\",\"properties\":{\"votes\":{\"type\":\"integer\"}}}", ToolAbstain, true, false },
+		{ "spies", "Your spies: where they are, what they are doing, coup chances, and technologies waiting to be stolen.",
+		  SCHEMA_EMPTY, ToolSpies, false, false },
+		{ "move_spy", "Send a spy (spy_index) to a city named by x,y or by civ and city, optionally as_diplomat; or withdraw=true to pull it out.",
+		  "{\"type\":\"object\",\"properties\":{\"spy_index\":{\"type\":\"integer\"},\"x\":{\"type\":\"integer\"},\"y\":{\"type\":\"integer\"},\"civ\":{\"type\":\"string\"},\"city\":{\"type\":\"string\"},\"as_diplomat\":{\"type\":\"boolean\"},\"withdraw\":{\"type\":\"boolean\"}},\"required\":[\"spy_index\"]}", ToolMoveSpy, true, false },
+		{ "stage_coup", "Attempt a coup in the city-state where the spy is; the spy may die.",
+		  "{\"type\":\"object\",\"properties\":{\"spy_index\":{\"type\":\"integer\"}},\"required\":[\"spy_index\"]}", ToolStageCoup, true, false },
+		{ "steal_tech", "Take a stolen technology: civ it was stolen from and tech from spies.techs_to_steal.",
+		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"},\"tech\":{\"type\":\"string\"}},\"required\":[\"civ\",\"tech\"]}", ToolStealTech, true, false },
+		{ "city_state", "City-states you have met (or one, with civ): influence, status, quests for you, and the actions open to you.",
+		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"}}}", ToolCityState, false, false },
+		{ "city_state_action", "Act toward a city-state: gift_gold (amount), gift_unit (unit_id), bully_gold, bully_worker, pledge_protection, revoke_protection, buyout, make_peace.",
+		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"},\"action\":{\"type\":\"string\"},\"amount\":{\"type\":\"integer\"},\"unit_id\":{\"type\":\"integer\"}},\"required\":[\"civ\",\"action\"]}", ToolCityStateAction, true, false },
+		{ "choose_ideology", "Pick your ideology (Freedom, Order or Autocracy) when the game allows it; without ideology it lists them and whether you can choose now.",
+		  "{\"type\":\"object\",\"properties\":{\"ideology\":{\"type\":\"string\"}}}", ToolChooseIdeology, true, false },
+		{ "switch_ideology", "Give in to public opinion and switch to the ideology your people prefer (costs turns of anarchy).",
+		  SCHEMA_EMPTY, ToolSwitchIdeology, true, false },
+		{ "archaeology", "Completed digs: without choice it shows the dig and the options; with choice it decides (artifact, artifact_for_other_civ, landmark, culture_boost, written_artifact, do_nothing).",
+		  "{\"type\":\"object\",\"properties\":{\"choice\":{\"type\":\"string\"}}}", ToolArchaeology, true, false },
+		{ "great_works", "Your great works by city and building slot, and your tourism.",
+		  SCHEMA_EMPTY, ToolGreatWorks, false, false },
+		{ "move_great_work", "Move a great work between slots (swapping if the target is full): from_city_id, from_building, from_slot, to_city_id, to_building, to_slot.",
+		  "{\"type\":\"object\",\"properties\":{\"from_city_id\":{\"type\":\"integer\"},\"from_building\":{\"type\":\"string\"},\"from_slot\":{\"type\":\"integer\"},\"to_city_id\":{\"type\":\"integer\"},\"to_building\":{\"type\":\"string\"},\"to_slot\":{\"type\":\"integer\"}},\"required\":[\"from_city_id\",\"from_building\",\"from_slot\",\"to_city_id\",\"to_building\",\"to_slot\"]}", ToolMoveGreatWork, true, false },
+		{ "trade_route_options", "Where a caravan or cargo ship (unit_id, inside one of your cities) can open a trade route, and of which type.",
+		  SCHEMA_UNIT, ToolTradeRouteOptions, false, false },
+		{ "establish_trade_route", "Send a caravan or cargo ship (unit_id) to the city at x,y with type international, food or production.",
+		  "{\"type\":\"object\",\"properties\":{\"unit_id\":{\"type\":\"integer\"},\"x\":{\"type\":\"integer\"},\"y\":{\"type\":\"integer\"},\"type\":{\"type\":\"string\"}},\"required\":[\"unit_id\",\"x\",\"y\",\"type\"]}", ToolEstablishTradeRoute, true, false },
+		{ "launch_spaceship", "Launch the completed spaceship for a science victory.",
+		  SCHEMA_EMPTY, ToolLaunchSpaceship, true, false },
+		{ CLAUDE_TOOL_ADVANCE_ROUND,
+		  "TESTING ONLY (needs testing_mode enabled). Ends your turn, ends the on-screen human's turn when it opens, and waits for your next turn (about a minute at most). Returns status plus round_advanced / turn_reopened.",
+		  "{\"type\":\"object\",\"properties\":{\"force\":{\"type\":\"boolean\"}}}", NULL, true, false },
+		{ "city_task",
+		  "Decide a city's fate or status: annex, puppet, raze, stop_razing or liberate (give a captured city back to its original owner).",
+		  "{\"type\":\"object\",\"properties\":{\"city_id\":{\"type\":\"integer\"},\"task\":{\"type\":\"string\"}},\"required\":[\"city_id\",\"task\"]}", ToolCityTask, true, false },
+		{ "take_seat",
+		  "Play a computer-controlled civilization in a shared game: it becomes a human seat named Claude at the human's difficulty, and the game's AI stops acting for it. The human on screen tells you which civilization; claim it during their turn. Until a seat is claimed every tool acts on the human's own civilization.",
+		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"}},\"required\":[\"civ\"]}", ToolTakeSeat, true, false },
+		{ "release_seat",
+		  "Hand the claimed civilization back to the game's AI.",
+		  SCHEMA_EMPTY, ToolReleaseSeat, true, false },
+		{ CLAUDE_TOOL_SKIP_HUMAN_TURN,
+		  "TESTING ONLY. Ends the turn of the human on screen as if they clicked End Turn, so a test game can run with nobody at the keyboard. Never call it in a real shared game: it ends the human's turn for them.",
+		  SCHEMA_EMPTY, ToolSkipHumanTurn, true, false },
+		{ "testing_mode",
+		  "TESTING ONLY. enabled=true unlocks skip_human_turn and advance_round and closes the idle human's own popups and leader screens unread, so an unattended test game does not stall. Off by default and reset every new game. Never enable it in a real shared game.",
+		  "{\"type\":\"object\",\"properties\":{\"enabled\":{\"type\":\"boolean\"}}}", ToolTestingMode, true, false },
 		{ "log",
 		  "Write a line to the in-game log the human can read. Use it for your reasoning and plans each turn: what you see, what you decided and why.",
 		  "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}},\"required\":[\"text\"]}", ToolLog, false, false },

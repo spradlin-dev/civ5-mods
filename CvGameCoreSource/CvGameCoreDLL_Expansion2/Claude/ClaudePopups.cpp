@@ -1,6 +1,7 @@
 #include "CvGameCoreDLLPCH.h"
 #include "ClaudePopups.h"
 #include "ClaudeToolSupport.h"
+#include "ClaudeSeat.h"
 #include "../CvGame.h"
 #include "../CvPlayer.h"
 #include "../CvPlot.h"
@@ -36,7 +37,7 @@ std::string ClaudeDescribePopup(int iType, int iData1, int iData2, int iData3, b
 	switch(iType)
 	{
 	case BUTTONPOPUP_GOODY_HUT_REWARD:
-		return "Ancient ruins explored: " + (text.empty() ? ClaudeFormat("reward %d", iData1) : text);
+		return text.empty() ? std::string("Ancient ruins explored") : "Ancient ruins explored: " + text;
 	case BUTTONPOPUP_TECH_AWARD:
 	{
 		CvTechEntry* t = (iData3 >= 0) ? GC.getTechInfo((TechTypes)iData3) : NULL;
@@ -68,6 +69,18 @@ std::string ClaudeDescribePopup(int iType, int iData1, int iData2, int iData3, b
 			return who + ": " + text + " (their diplomacy screen is open in the game; a human must close it)";
 		std::string s = "Met the city-state of " + who;
 		if(iData2 > 0) s += ClaudeFormat(" (they gifted %d gold)", iData2);
+		return s;
+	}
+	case BUTTONPOPUP_CITY_CAPTURED:
+	{
+		PlayerTypes eMe = ClaudeSeat();
+		CvCity* c = (eMe != NO_PLAYER) ? GET_PLAYER(eMe).getCity(iData1) : NULL;
+		std::string s = ClaudeFormat("Captured %s (city id %d)", c ? c->getName().c_str() : "a city", iData1);
+		if(iData2 > 0) s += ClaudeFormat(", plundering %d gold", iData2);
+		if(iData3 > 0) s += ClaudeFormat(" and %d culture", iData3);
+		s += ". Decide its fate with city_task: annex, puppet, raze";
+		PlayerTypes eOrig = c ? c->getOriginalOwner() : NO_PLAYER;
+		if(c && eOrig != NO_PLAYER && eOrig != eMe && GET_PLAYER(eMe).CanLiberatePlayerCity(eOrig)) s += " or liberate (" + CivName(eOrig) + ")";
 		return s;
 	}
 	case BUTTONPOPUP_ADVISOR_COUNSEL:

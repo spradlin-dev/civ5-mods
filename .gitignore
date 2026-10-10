@@ -3,3 +3,4 @@ CvGameCoreSource/BuildTemp/
 *.ncb
 *.suo
 *.user
+deployed-symbols/

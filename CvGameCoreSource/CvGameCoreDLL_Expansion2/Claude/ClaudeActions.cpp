@@ -127,10 +127,8 @@ CLAUDE_TOOL(ToolPromoteUnit)
 {
 	CvPlayer* me = MeActing(err);
 	if(!me) return JVal();
-	int iUnit = 0;
-	if(!RequireInt(args, "unit_id", iUnit, err)) return JVal();
-	CvUnit* u = me->getUnit(iUnit);
-	if(!u) { err = "no unit with that id"; return JVal(); }
+	CvUnit* u = RequireUnit(me, args, err);
+	if(!u) return JVal();
 	std::string key = ArgStr(args, "promotion");
 	PromotionTypes e = FindPromotionType(key);
 	if(e == NO_PROMOTION) { err = "unknown promotion '" + key + "'; see unit_options.promotions_available"; return JVal(); }
@@ -146,10 +144,8 @@ CLAUDE_TOOL(ToolUpgradeUnit)
 {
 	CvPlayer* me = MeActing(err);
 	if(!me) return JVal();
-	int iUnit = 0;
-	if(!RequireInt(args, "unit_id", iUnit, err)) return JVal();
-	CvUnit* u = me->getUnit(iUnit);
-	if(!u) { err = "no unit with that id"; return JVal(); }
+	CvUnit* u = RequireUnit(me, args, err);
+	if(!u) return JVal();
 	if(!u->CanUpgradeRightNow(false)) { err = "that unit cannot upgrade now (no upgrade available, not enough gold, wrong location, or no moves left)"; return JVal(); }
 	int iGoldBefore = me->GetTreasury()->GetGold();
 	CvUnit* pNew = u->DoUpgrade();
@@ -209,11 +205,11 @@ CLAUDE_TOOL(ToolAttack)
 {
 	CvPlayer* me = MeActing(err);
 	if(!me) return JVal();
-	int iUnit = 0, x = 0, y = 0;
-	if(!RequireInt(args, "unit_id", iUnit, err) || !RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
+	int x = 0, y = 0;
+	CvUnit* u = RequireUnit(me, args, err);
+	if(!u || !RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
+	int iUnit = u->GetID();
 	bool bPreview = ArgBool(args, "preview_only", false);
-	CvUnit* u = me->getUnit(iUnit);
-	if(!u) { err = "no unit with that id"; return JVal(); }
 	CvMap& map = GC.getMap();
 	if(x < 0 || y < 0 || x >= map.getGridWidth() || y >= map.getGridHeight()) { err = "target is off the map"; return JVal(); }
 	CvPlot* p = map.plot(x, y);
@@ -314,17 +310,21 @@ CLAUDE_TOOL(ToolBuy)
 	UnitTypes eUnit = FindUnitType(item);
 	BuildingTypes eBuilding = (eUnit == NO_UNIT) ? FindBuildingType(item) : NO_BUILDING;
 	if(eUnit == NO_UNIT && eBuilding == NO_BUILDING) { err = "unknown item '" + item + "'; use a UNIT_ or BUILDING_ type from city_options"; return JVal(); }
+	bool bFaith = ArgBool(args, "with_faith", false);
+	YieldTypes eYield = bFaith ? YIELD_FAITH : YIELD_GOLD;
 	int iGoldBefore = me->GetTreasury()->GetGold();
-	if(!c->IsCanPurchase(true, true, eUnit, eBuilding, NO_PROJECT, YIELD_GOLD))
+	int iFaithBefore = me->GetFaith();
+	if(!c->IsCanPurchase(true, true, eUnit, eBuilding, NO_PROJECT, eYield))
 	{
-		err = "cannot buy that here now (not available, already built, or not enough gold: you have " + ClaudeFormat("%d", iGoldBefore) + ")";
+		err = bFaith ? ClaudeFormat("cannot buy that with faith here now (not available, or not enough faith: you have %d)", iFaithBefore)
+		             : ClaudeFormat("cannot buy that here now (not available, already built, or not enough gold: you have %d)", iGoldBefore);
 		return JVal();
 	}
-	c->Purchase(eUnit, eBuilding, NO_PROJECT, YIELD_GOLD);
+	c->Purchase(eUnit, eBuilding, NO_PROJECT, eYield);
 	JObj o;
 	o["ok"] = J(true);
-	o["gold_spent"] = J(iGoldBefore - me->GetTreasury()->GetGold());
-	o["gold"] = J(me->GetTreasury()->GetGold());
+	if(bFaith) { o["faith_spent"] = J(iFaithBefore - me->GetFaith()); o["faith"] = J(me->GetFaith()); }
+	else { o["gold_spent"] = J(iGoldBefore - me->GetTreasury()->GetGold()); o["gold"] = J(me->GetTreasury()->GetGold()); }
 	return JVal(o);
 }
 
@@ -360,6 +360,54 @@ CLAUDE_TOOL(ToolSetCityFocus)
 	CvCityCitizens* pCitizens = c->GetCityCitizens();
 	pCitizens->SetFocusType(e);
 	if(HasArg(args, "avoid_growth")) pCitizens->SetForcedAvoidGrowth(ArgBool(args, "avoid_growth", false));
+	JObj o;
+	o["ok"] = J(true);
+	o["city"] = CityJson(c);
+	return JVal(o);
+}
+
+CLAUDE_TOOL(ToolCityTask)
+{
+	CvPlayer* me = MeActing(err);
+	if(!me) return JVal();
+	int iCity = 0;
+	if(!RequireInt(args, "city_id", iCity, err)) return JVal();
+	CvCity* c = me->getCity(iCity);
+	if(!c) { err = "no city with that id"; return JVal(); }
+	std::string task = ArgStr(args, "task");
+	if(task == "annex")
+	{
+		if(!c->IsPuppet() && !c->IsIgnoreCityForHappiness()) { err = "the city is already yours outright"; return JVal(); }
+		if(me->GetPlayerTraits()->IsNoAnnexing()) { err = "your civilization cannot annex cities"; return JVal(); }
+		c->DoAnnex();
+	}
+	else if(task == "puppet")
+	{
+		if(c->IsPuppet()) { err = "already a puppet"; return JVal(); }
+		if(!c->IsIgnoreCityForHappiness()) { err = "only a city whose fate is still undecided after capture can be made a puppet"; return JVal(); }
+		c->DoCreatePuppet();
+	}
+	else if(task == "raze")
+	{
+		if(!me->canRaze(c)) { err = "this city cannot be razed (capitals and some others never can)"; return JVal(); }
+		me->raze(c);
+	}
+	else if(task == "stop_razing")
+	{
+		if(!c->IsRazing()) { err = "the city is not being razed"; return JVal(); }
+		me->unraze(c);
+	}
+	else if(task == "liberate")
+	{
+		PlayerTypes eOrig = c->getOriginalOwner();
+		if(eOrig == NO_PLAYER || eOrig == me->GetID() || !me->CanLiberatePlayerCity(eOrig)) { err = "this city cannot be liberated (its original owner cannot take it back)"; return JVal(); }
+		me->DoLiberatePlayer(eOrig, c->GetID());
+		JObj done;
+		done["ok"] = J(true);
+		done["liberated_to"] = J(CivName(eOrig));
+		return JVal(done);
+	}
+	else { err = "unknown task '" + task + "'; use annex, puppet, raze, stop_razing or liberate"; return JVal(); }
 	JObj o;
 	o["ok"] = J(true);
 	o["city"] = CityJson(c);

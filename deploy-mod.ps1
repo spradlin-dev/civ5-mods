@@ -10,6 +10,10 @@ if (Test-Path $modDir) { Remove-Item -Recurse -Force $modDir }
 New-Item -ItemType Directory -Force $modDir | Out-Null
 
 Copy-Item $dll (Join-Path $modDir 'CvGameCore_Expansion2.dll')
+# Symbols for the deployed DLL, so a crash offset from the Windows event log can be resolved later.
+$symDir = Join-Path $root 'deployed-symbols'
+New-Item -ItemType Directory -Force $symDir | Out-Null
+Get-ChildItem (Split-Path $dll) -Filter 'CvGameCoreDLL_Expansion2Win32Mod.*' | Copy-Item -Destination $symDir -Force
 Get-ChildItem $modSrc -Recurse -File | Where-Object { $_.Extension -ne '.modinfo' } | ForEach-Object {
     $rel = $_.FullName.Substring($modSrc.Length + 1)
     $dest = Join-Path $modDir $rel

@@ -55,6 +55,7 @@
 
 // Include this after all other headers.
 #define LINT_WARNINGS_ONLY
+#include "Claude/ClaudeSeat.h"
 #include "LintFree.h"
 
 //------------------------------------------------------------------------------
@@ -2655,6 +2656,7 @@ void CvPlayer::acquireCity(CvCity* pOldCity, bool bConquest, bool bGift)
 				}
 				else if (pNewCity->getOriginalOwner() != GetID() || GetPlayerTraits()->IsNoAnnexing() || bIsMinorCivBuyout)
 				{
+					ClaudeNoteSeatPopup(GetID(), BUTTONPOPUP_CITY_CAPTURED, pNewCity->GetID(), iCaptureGold, iCaptureCulture, bConquest, "");
 					if(GC.getGame().getActivePlayer() == GetID())
 					{
 						int iTemp[5] = { pNewCity->GetID(), iCaptureGold, iCaptureCulture, iCaptureGreatWorks, eLiberatedPlayer };
@@ -6434,6 +6436,7 @@ void CvPlayer::receiveGoody(CvPlot* pPlot, GoodyTypes eGoody, CvUnit* pUnit)
 	{
 		GC.GetEngineUserInterface()->AddPlotMessage(0, pPlot->GetPlotIndex(), GetID(), true, GC.getEVENT_MESSAGE_TIME(), strBuffer);
 	}
+	ClaudeNoteSeatPopup(GetID(), BUTTONPOPUP_GOODY_HUT_REWARD, eGoody, 0, 0, false, strBuffer.c_str());
 
 	// If it's the active player then show the popup
 	if(GetID() == GC.getGame().getActivePlayer())
@@ -12270,6 +12273,7 @@ void CvPlayer::DoProcessGoldenAge()
 				int iLength = getGoldenAgeLength();
 				changeGoldenAgeTurns(iLength);
 
+				ClaudeNoteSeatPopup(GetID(), BUTTONPOPUP_GOLDEN_AGE_REWARD, 0, 0, 0, false, "");
 				// If it's the active player then show the popup
 				if(GetID() == GC.getGame().getActivePlayer())
 				{

@@ -6,6 +6,8 @@
 #include "ClaudeTools.h"
 #include "ClaudeToolSupport.h"
 #include "ClaudePopups.h"
+#include "ClaudeSeat.h"
+#include "ClaudeDiplomacy.h"
 #include "../CvGame.h"
 #include "../CvPlayer.h"
 #include "../CvGlobals.h"
@@ -24,6 +26,7 @@ struct ClaudePendingPopup
 	int type, data1, data2, data3;
 	bool option1;
 	std::string text;
+	bool onScreen;
 };
 
 struct ClaudeJob
@@ -102,11 +105,13 @@ struct ClaudeBridge::Impl
 	int popupSeq;
 	std::string dialogsToClose; // newline-joined; ClaudeLog.lua looks each name up under /InGame/
 	unsigned int gameSeed;
-	int gameTurn;
 
 	// Written by the game thread, read by the HTTP thread.
+	volatile int gameTurn;
+	volatile bool testingMode;
 	volatile bool shuttingDown;
 	volatile bool myTurn;
+	volatile bool screenHumanTurn; // the human on screen (not Claude's seat) may act
 	volatile DWORD lastTickMs;
 
 	Impl();
@@ -131,6 +136,7 @@ struct ClaudeBridge::Impl
 	void HandleHttp(const ClaudeHttpRequest& req, ClaudeHttpResponse& res);
 	picojson::value HandleRpc(const picojson::value& request, bool& bIsNotification);
 	picojson::value CallTool(const std::string& name, const picojson::object& args, bool& bIsError);
+	picojson::value AdvanceRound(const picojson::object& args, bool& bIsError);
 	picojson::value RunOnGameThread(const std::string& tool, const picojson::object& args, std::string& error);
 };
 
@@ -147,10 +153,10 @@ void ClaudeBridge::Shutdown() { m_pImpl->Shutdown(); }
 void ClaudeBridge::LogLine(const std::string& text) { m_pImpl->LogLine(text); }
 int ClaudeBridge::GetLogText(std::string& out) { return m_pImpl->GetLogText(out); }
 
-void ClaudeBridge::NotePopup(int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text)
+void ClaudeBridge::NotePopup(int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text, bool bOnScreen)
 {
 	ClaudePendingPopup p;
-	p.type = iType; p.data1 = iData1; p.data2 = iData2; p.data3 = iData3; p.option1 = bOption1; p.text = text;
+	p.type = iType; p.data1 = iData1; p.data2 = iData2; p.data3 = iData3; p.option1 = bOption1; p.text = text; p.onScreen = bOnScreen;
 	EnterCriticalSection(&m_pImpl->lock);
 	if(m_pImpl->pendingPopups.size() < CLAUDE_MAX_POPUPS) m_pImpl->pendingPopups.push_back(p);
 	else ++m_pImpl->pendingDropped;
@@ -165,6 +171,9 @@ std::string ClaudeBridge::TakeDialogsToClose()
 	LeaveCriticalSection(&m_pImpl->lock);
 	return out;
 }
+
+void ClaudeBridge::SetTestingMode(bool bOn) { m_pImpl->testingMode = bOn; }
+bool ClaudeBridge::TestingMode() const { return m_pImpl->testingMode; }
 
 int ClaudeBridge::CountUnread()
 {
@@ -206,8 +215,8 @@ std::vector<ClaudePopup> ClaudeBridge::GetPopupsSince(int iTurn)
 }
 
 ClaudeBridge::Impl::Impl()
-	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), logSeq(0), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0), gameTurn(-1),
-	  shuttingDown(false), myTurn(false), lastTickMs(0)
+	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), logSeq(0), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0), gameTurn(-1), testingMode(false),
+	  shuttingDown(false), myTurn(false), screenHumanTurn(false), lastTickMs(0)
 {
 	InitializeCriticalSection(&lock);
 }
@@ -269,8 +278,10 @@ void ClaudeBridge::Impl::TryStart()
 
 void ClaudeBridge::Impl::UpdateTurnFlags()
 {
+	PlayerTypes eSeat = ClaudeSeat();
+	myTurn = (eSeat != NO_PLAYER) && ClaudeIsPlayerTurn(GET_PLAYER(eSeat));
 	PlayerTypes eActive = GC.getGame().getActivePlayer();
-	myTurn = (eActive != NO_PLAYER) && ClaudeIsPlayerTurn(GET_PLAYER(eActive));
+	screenHumanTurn = (eActive != NO_PLAYER) && eActive != eSeat && ClaudeIsPlayerTurn(GET_PLAYER(eActive));
 }
 
 void ClaudeBridge::Impl::Tick()
@@ -317,12 +328,25 @@ void ClaudeBridge::Impl::DrainPopups()
 	pendingDropped = 0;
 	LeaveCriticalSection(&lock);
 	if(iLost > 0) LogLine(ClaudeFormat("[bridge] %d game message(s) were lost: more than %d arrived before the game thread read them", iLost, CLAUDE_MAX_POPUPS));
+	bool bScreenIsMine = ClaudeSeatOnScreen();
 	for(size_t i = 0; i < pending.size(); ++i)
 	{
 		const ClaudePendingPopup& p = pending[i];
+		if(p.onScreen && !bScreenIsMine) // the human's own popup
+		{
+			const char* dialog = ClaudePopupDialogToClose(p.type);
+			if(testingMode && *dialog)
+			{
+				EnterCriticalSection(&lock);
+				dialogsToClose += std::string(dialog) + "\n";
+				LeaveCriticalSection(&lock);
+				LogLine(std::string("[testing] closed the human's ") + dialog + " unread");
+			}
+			continue;
+		}
 		ClaudePopup popup;
 		popup.turn = GC.getGame().getGameTurn();
-		popup.dialog = ClaudePopupDialogToClose(p.type);
+		popup.dialog = p.onScreen ? ClaudePopupDialogToClose(p.type) : "";
 		popup.text = ClaudeDescribePopup(p.type, p.data1, p.data2, p.data3, p.option1, p.text);
 		if(popup.text.empty())
 		{
@@ -359,7 +383,9 @@ void ClaudeBridge::Impl::ResetForNewGame()
 	popups.clear();
 	popupSeq = 0;
 	dialogsToClose.clear();
+	testingMode = false;
 	LeaveCriticalSection(&lock);
+	ClaudeResetDiploRequests();
 }
 
 void ClaudeBridge::Impl::RunJob(ClaudeJob* pJob)
@@ -371,14 +397,14 @@ void ClaudeBridge::Impl::RunJob(ClaudeJob* pJob)
 		return;
 	}
 
-	pJob->result = pTool->handler(pJob->args, pJob->error);
-
-	if(pTool->isAction)
+	if(pTool->handler == NULL)
 	{
-		std::string line = "> " + pJob->tool + " " + picojson::value(pJob->args).serialize();
-		if(!pJob->error.empty()) line += "  => ERROR: " + pJob->error;
-		LogLine(line);
+		pJob->error = pJob->tool + " runs on the bridge, not the game thread";
+		return;
 	}
+	if(pTool->isAction) LogLine("> " + pJob->tool + " " + picojson::value(pJob->args).serialize());
+	pJob->result = pTool->handler(pJob->args, pJob->error);
+	if(pTool->isAction && !pJob->error.empty()) LogLine("  => ERROR: " + pJob->error);
 }
 
 void ClaudeBridge::Impl::LogLine(const std::string& text)
@@ -504,7 +530,12 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bo
 		    "You are playing Civilization V as the active human player. Call wait_for_my_turn until it is your turn, "
 		    "then use the query tools, act, write your reasoning with log, and finish with end_turn. "
 		    "A unit with a queued multi-turn move is still where it stopped when your next turn opens; it moves when you call end_turn, "
-		    "as for a human clicking End Turn. Leave it alone unless you want it to go somewhere else.");
+		    "as for a human clicking End Turn. Leave it alone unless you want it to go somewhere else. "
+		    "In a shared game the human tells you which civilization to play: claim it with take_seat during their turn. "
+		    "Until then every tool acts on the human's own civilization. A claimed seat is off screen; "
+		    "your turn comes after the human's each round, so wait_for_my_turn may take as long as they do. "
+		    "Other leaders talk to you through diplomacy requests (briefing.diplomacy_requests): answer them with respond_to_request. "
+		    "Use propose_deal, demand, discuss and make_peace for your own diplomacy.");
 		return JsonRpcResponse(id, picojson::value(result));
 	}
 
@@ -580,6 +611,13 @@ picojson::value ClaudeBridge::Impl::CallTool(const std::string& name, const pico
 		return picojson::value(argError);
 	}
 
+	if(pTool->handler == NULL)
+	{
+		if(name == CLAUDE_TOOL_ADVANCE_ROUND) return AdvanceRound(args, bIsError);
+		bIsError = true;
+		return picojson::value("no bridge handler for " + name);
+	}
+
 	if(pTool->waitsForTurn)
 	{
 		double timeout = CLAUDE_WAIT_DEFAULT_SECONDS;
@@ -601,6 +639,42 @@ picojson::value ClaudeBridge::Impl::CallTool(const std::string& name, const pico
 		return picojson::value(error);
 	}
 	return result;
+}
+
+// Solo testing: one call per round instead of end_turn, wait, skip_human_turn, wait.
+picojson::value ClaudeBridge::Impl::AdvanceRound(const picojson::object& args, bool& bIsError)
+{
+	if(!testingMode) { bIsError = true; return picojson::value("advance_round is a testing tool: call testing_mode with enabled=true first"); }
+	std::string error;
+	int iTurnBefore = gameTurn;
+	picojson::value r = RunOnGameThread(CLAUDE_TOOL_END_TURN, args, error);
+	if(!error.empty()) { bIsError = true; return picojson::value(error); }
+	DWORD start = GetTickCount();
+	const DWORD limit = (DWORD)(CLAUDE_WAIT_MAX_SECONDS * 1000.0);
+	while(!shuttingDown && myTurn && GetTickCount() - start < 5000) Sleep(100);
+	bool bSkipped = false;
+	while(!shuttingDown && GetTickCount() - start < limit)
+	{
+		if(GameRunning() && myTurn) break; // the turn came back (a unit arrived with moves left) or the round is done
+		if(!bSkipped && screenHumanTurn)
+		{
+			picojson::object none;
+			RunOnGameThread(CLAUDE_TOOL_SKIP_HUMAN_TURN, none, error);
+			if(!error.empty()) { bIsError = true; return picojson::value(error); }
+			bSkipped = true;
+		}
+		Sleep(250);
+	}
+	picojson::object none;
+	r = RunOnGameThread(CLAUDE_TOOL_STATUS, none, error);
+	if(!error.empty()) { bIsError = true; return picojson::value(error); }
+	if(r.is<picojson::object>())
+	{
+		picojson::object& o = r.get<picojson::object>();
+		o["round_advanced"] = picojson::value(gameTurn > iTurnBefore);
+		o["turn_reopened"] = picojson::value(gameTurn == iTurnBefore && myTurn);
+	}
+	return r;
 }
 
 picojson::value ClaudeBridge::Impl::RunOnGameThread(const std::string& tool, const picojson::object& args, std::string& error)

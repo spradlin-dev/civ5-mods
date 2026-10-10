@@ -1,6 +1,7 @@
 #include "CvGameCoreDLLPCH.h"
 #include <stdarg.h>
 #include "ClaudeToolSupport.h"
+#include "ClaudeSeat.h"
 #include "ClaudeBridge.h"
 #include "../CvGame.h"
 #include "../CvPlayer.h"
@@ -34,7 +35,10 @@ std::string ClaudeFormat(const char* fmt, ...)
 
 bool ClaudeIsPlayerTurn(const CvPlayer& kPlayer)
 {
-	return kPlayer.isHuman() && kPlayer.isAlive() && kPlayer.isTurnActive() && !kPlayer.isEndTurn() && !gDLL->HasSentTurnComplete();
+	if(!kPlayer.isHuman() || !kPlayer.isAlive() || !kPlayer.isTurnActive() || kPlayer.isEndTurn()) return false;
+	// The engine's turn-complete flag belongs to the player on screen.
+	bool bOnScreen = (kPlayer.GetID() == GC.getGame().getActivePlayer());
+	return !(bOnScreen && gDLL->HasSentTurnComplete());
 }
 
 namespace ClaudeTool
@@ -86,11 +90,13 @@ namespace ClaudeTool
 
 	CvPlayer* Me(std::string& err)
 	{
-		PlayerTypes e = GC.getGame().getActivePlayer();
-		if(e == NO_PLAYER) { err = "no active player"; return NULL; }
-		CvPlayer& p = GET_PLAYER(e);
-		if(!p.isHuman()) { err = "the active player is not a human slot"; return NULL; }
-		return &p;
+		PlayerTypes e = ClaudeSeat();
+		if(e == NO_PLAYER)
+		{
+			err = "no active human player";
+			return NULL;
+		}
+		return &GET_PLAYER(e);
 	}
 
 	CvPlayer* MeActing(std::string& err)
@@ -171,7 +177,7 @@ namespace ClaudeTool
 		for(int i = 0; i < GC.getNumUnitInfos(); ++i)
 		{
 			CvUnitEntry* e = GC.getUnitInfo((UnitTypes)i);
-			if(e && _stricmp(e->GetType(), key.c_str()) == 0) return (UnitTypes)i;
+			if(e && MatchesKey(e->GetType(), e->GetDescription(), key)) return (UnitTypes)i;
 		}
 		return NO_UNIT;
 	}
@@ -180,7 +186,7 @@ namespace ClaudeTool
 		for(int i = 0; i < GC.getNumBuildingInfos(); ++i)
 		{
 			CvBuildingEntry* e = GC.getBuildingInfo((BuildingTypes)i);
-			if(e && _stricmp(e->GetType(), key.c_str()) == 0) return (BuildingTypes)i;
+			if(e && MatchesKey(e->GetType(), e->GetDescription(), key)) return (BuildingTypes)i;
 		}
 		return NO_BUILDING;
 	}
@@ -189,7 +195,7 @@ namespace ClaudeTool
 		for(int i = 0; i < GC.getNumTechInfos(); ++i)
 		{
 			CvTechEntry* e = GC.getTechInfo((TechTypes)i);
-			if(e && _stricmp(e->GetType(), key.c_str()) == 0) return (TechTypes)i;
+			if(e && MatchesKey(e->GetType(), e->GetDescription(), key)) return (TechTypes)i;
 		}
 		return NO_TECH;
 	}
@@ -198,7 +204,7 @@ namespace ClaudeTool
 		for(int i = 0; i < GC.getNumBuildInfos(); ++i)
 		{
 			CvBuildInfo* e = GC.getBuildInfo((BuildTypes)i);
-			if(e && _stricmp(e->GetType(), key.c_str()) == 0) return (BuildTypes)i;
+			if(e && MatchesKey(e->GetType(), e->GetDescription(), key)) return (BuildTypes)i;
 		}
 		return NO_BUILD;
 	}
@@ -207,7 +213,7 @@ namespace ClaudeTool
 		for(int i = 0; i < GC.getNumPromotionInfos(); ++i)
 		{
 			CvPromotionEntry* e = GC.getPromotionInfo((PromotionTypes)i);
-			if(e && _stricmp(e->GetType(), key.c_str()) == 0) return (PromotionTypes)i;
+			if(e && MatchesKey(e->GetType(), e->GetDescription(), key)) return (PromotionTypes)i;
 		}
 		return NO_PROMOTION;
 	}
@@ -216,7 +222,7 @@ namespace ClaudeTool
 		for(int i = 0; i < GC.getNumPolicyInfos(); ++i)
 		{
 			CvPolicyEntry* e = GC.getPolicyInfo((PolicyTypes)i);
-			if(e && _stricmp(e->GetType(), key.c_str()) == 0) return (PolicyTypes)i;
+			if(e && MatchesKey(e->GetType(), e->GetDescription(), key)) return (PolicyTypes)i;
 		}
 		return NO_POLICY;
 	}
@@ -225,7 +231,7 @@ namespace ClaudeTool
 		for(int i = 0; i < GC.getNumPolicyBranchInfos(); ++i)
 		{
 			CvPolicyBranchEntry* e = GC.getPolicyBranchInfo((PolicyBranchTypes)i);
-			if(e && _stricmp(e->GetType(), key.c_str()) == 0) return (PolicyBranchTypes)i;
+			if(e && MatchesKey(e->GetType(), e->GetDescription(), key)) return (PolicyBranchTypes)i;
 		}
 		return NO_POLICY_BRANCH_TYPE;
 	}
@@ -234,7 +240,7 @@ namespace ClaudeTool
 		for(int i = 0; i < GC.getNumImprovementInfos(); ++i)
 		{
 			CvImprovementEntry* e = GC.getImprovementInfo((ImprovementTypes)i);
-			if(e && _stricmp(e->GetType(), key.c_str()) == 0) return (ImprovementTypes)i;
+			if(e && MatchesKey(e->GetType(), e->GetDescription(), key)) return (ImprovementTypes)i;
 		}
 		return NO_IMPROVEMENT;
 	}
@@ -243,10 +249,37 @@ namespace ClaudeTool
 		for(int i = 0; i < GC.getNumResourceInfos(); ++i)
 		{
 			CvResourceInfo* e = GC.getResourceInfo((ResourceTypes)i);
-			if(e && _stricmp(e->GetType(), key.c_str()) == 0) return (ResourceTypes)i;
+			if(e && MatchesKey(e->GetType(), e->GetDescription(), key)) return (ResourceTypes)i;
 		}
 		return NO_RESOURCE;
 	}
+	ProjectTypes FindProjectType(const std::string& key)
+	{
+		if(key.empty()) return NO_PROJECT;
+		for(int i = 0; i < GC.getNumProjectInfos(); ++i)
+		{
+			CvProjectEntry* info = GC.getProjectInfo((ProjectTypes)i);
+			if(info && MatchesKey(info->GetType(), info->GetDescription(), key)) return (ProjectTypes)i;
+		}
+		return NO_PROJECT;
+	}
+
+	bool MatchesKey(const char* szType, const char* szDescription, const std::string& key)
+	{
+		if(key.empty()) return false;
+		if(szType && _stricmp(szType, key.c_str()) == 0) return true;
+		return szDescription && _stricmp(szDescription, key.c_str()) == 0;
+	}
+
+	CvUnit* RequireUnit(CvPlayer* me, const JObj& args, std::string& err)
+	{
+		int iUnit = 0;
+		if(!RequireInt(args, "unit_id", iUnit, err)) return NULL;
+		CvUnit* u = me->getUnit(iUnit);
+		if(!u) err = "no unit with that id";
+		return u;
+	}
+
 	PlayerTypes FindPlayer(const std::string& key)
 	{
 		if(key.empty()) return NO_PLAYER;
@@ -328,20 +361,20 @@ namespace ClaudeTool
 		case ENDTURN_BLOCKING_CITY_RANGE_ATTACK: return "city_range_attack: a city can attack an enemy (city_attack)";
 		case ENDTURN_BLOCKING_FREE_TECH: return "free_tech: you have a free technology to claim (set_research grants it)";
 		case ENDTURN_BLOCKING_FREE_POLICY: return "free_policy: you have a free policy to adopt (adopt_policy)";
-		case ENDTURN_BLOCKING_DIPLO_VOTE: return std::string("diplo_vote: a World Congress vote is pending") + NO_TOOL;
-		case ENDTURN_BLOCKING_MINOR_QUEST: return std::string("minor_quest: a city-state quest needs a response") + NO_TOOL;
-		case ENDTURN_BLOCKING_FREE_ITEMS: return std::string("free_items: choose free items") + NO_TOOL;
-		case ENDTURN_BLOCKING_FOUND_PANTHEON: return std::string("found_pantheon: choose a pantheon belief") + NO_TOOL;
-		case ENDTURN_BLOCKING_FOUND_RELIGION: return std::string("found_religion: found a religion") + NO_TOOL;
-		case ENDTURN_BLOCKING_ENHANCE_RELIGION: return std::string("enhance_religion: enhance your religion") + NO_TOOL;
-		case ENDTURN_BLOCKING_STEAL_TECH: return std::string("steal_tech: choose a technology to steal") + NO_TOOL;
-		case ENDTURN_BLOCKING_MAYA_LONG_COUNT: return std::string("maya_long_count: choose a great person") + NO_TOOL;
-		case ENDTURN_BLOCKING_FAITH_GREAT_PERSON: return std::string("faith_great_person: choose a great person") + NO_TOOL;
-		case ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF: return std::string("reformation_belief: choose a reformation belief") + NO_TOOL;
-		case ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS: return std::string("league_proposals: the World Congress wants proposals") + NO_TOOL;
-		case ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY: return std::string("archaeology: choose what to do with an artifact") + NO_TOOL;
-		case ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES: return std::string("league_votes: the World Congress wants votes") + NO_TOOL;
-		case ENDTURN_BLOCKING_CHOOSE_IDEOLOGY: return std::string("ideology: choose an ideology") + NO_TOOL;
+		case ENDTURN_BLOCKING_DIPLO_VOTE: return "diplo_vote: a World Congress vote is pending (congress / vote_resolution)";
+		case ENDTURN_BLOCKING_MINOR_QUEST: return "minor_quest: a city-state quest needs a response (city_state)";
+		case ENDTURN_BLOCKING_FREE_ITEMS: return "free_items: choose a free great person (religion_options / choose_great_person with source=free)";
+		case ENDTURN_BLOCKING_FOUND_PANTHEON: return "found_pantheon: choose a pantheon belief (religion_options / found_pantheon)";
+		case ENDTURN_BLOCKING_FOUND_RELIGION: return "found_religion: found a religion (religion_options / found_religion)";
+		case ENDTURN_BLOCKING_ENHANCE_RELIGION: return "enhance_religion: enhance your religion (religion_options / enhance_religion)";
+		case ENDTURN_BLOCKING_STEAL_TECH: return "steal_tech: choose a technology to steal (spies / steal_tech)";
+		case ENDTURN_BLOCKING_MAYA_LONG_COUNT: return "maya_long_count: choose a great person (religion_options / choose_great_person with source=maya)";
+		case ENDTURN_BLOCKING_FAITH_GREAT_PERSON: return "faith_great_person: choose a great person (religion_options / choose_great_person with source=faith)";
+		case ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF: return "reformation_belief: choose a reformation belief (religion_options / add_reformation_belief)";
+		case ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS: return "league_proposals: the World Congress wants proposals (congress / propose_resolution)";
+		case ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY: return "archaeology: choose what to do with a dig (archaeology)";
+		case ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES: return "league_votes: the World Congress wants votes (congress / vote_resolution / abstain)";
+		case ENDTURN_BLOCKING_CHOOSE_IDEOLOGY: return "ideology: choose an ideology (choose_ideology)";
 		default: return ClaudeFormat("other (blocking type %d)", (int)e) + NO_TOOL;
 		}
 	}
@@ -398,6 +431,22 @@ namespace ClaudeTool
 		bool CanSentry(CvUnit* u, CvPlot* p) { return u->canSentry(p); }
 		bool CanHeal(CvUnit* u, CvPlot* p) { return u->canHeal(p); }
 		bool CanPillage(CvUnit* u, CvPlot* p) { return u->canPillage(p); }
+		bool CanDiscover(CvUnit* u, CvPlot* p) { return u->canDiscover(p); }
+		bool CanHurry(CvUnit* u, CvPlot* p) { return u->canHurry(p); }
+		bool CanTradeMission(CvUnit* u, CvPlot* p) { return u->canTrade(p); }
+		bool CanBuyCityState(CvUnit* u, CvPlot* p) { return u->canBuyCityState(p); }
+		bool CanGoldenAge(CvUnit* u, CvPlot* p) { return u->canGoldenAge(p); }
+		bool CanCultureBomb(CvUnit* u, CvPlot* p) { return u->CanCultureBomb(p); }
+		bool CanGivePolicies(CvUnit* u, CvPlot* p) { return u->canGivePolicies(p); }
+		bool CanConcertTour(CvUnit* u, CvPlot* p) { return u->canBlastTourism(p); }
+		bool CanCreateGreatWork(CvUnit* u, CvPlot* p) { return u->canCreateGreatWork(p); }
+		bool CanBuildSpaceship(CvUnit* u, CvPlot* p) { return u->CanBuildSpaceship(p, false); }
+		bool CanSellExoticGoods(CvUnit* u, CvPlot* p) { return u->canSellExoticGoods(p); }
+		bool CanRepairFleet(CvUnit* u, CvPlot* p) { return u->canRepairFleet(p); }
+		bool CanFoundReligion(CvUnit* u, CvPlot* p) { return u->CanFoundReligion(p); }
+		bool CanSpreadReligion(CvUnit* u, CvPlot* p) { return u->CanSpreadReligion(p); }
+		bool CanEnhanceReligion(CvUnit* u, CvPlot* p) { return u->CanEnhanceReligion(p); }
+		bool CanRemoveHeresy(CvUnit* u, CvPlot* p) { return u->CanRemoveHeresy(p); }
 
 		const UnitActionDef UNIT_ACTIONS[] =
 		{
@@ -408,6 +457,22 @@ namespace ClaudeTool
 			{ "alert",      CanSentry,  CvTypes::getMISSION_ALERT,   "unit cannot go on alert here" },
 			{ "heal",       CanHeal,    CvTypes::getMISSION_HEAL,    "unit cannot heal here (full health, or healing not allowed on this tile)" },
 			{ "pillage",    CanPillage, CvTypes::getMISSION_PILLAGE, "nothing to pillage here or unit cannot pillage" },
+			{ "discover",   CanDiscover, CvTypes::getMISSION_DISCOVER, "only a Great Scientist can discover a technology" },
+			{ "hurry_production", CanHurry, CvTypes::getMISSION_HURRY, "only a Great Engineer inside one of your cities can hurry production" },
+			{ "trade_mission", CanTradeMission, CvTypes::getMISSION_TRADE, "only a Great Merchant inside a city-state can run a trade mission" },
+			{ "buy_city_state", CanBuyCityState, CvTypes::getMISSION_BUY_CITY_STATE, "only Venice's Merchant of Venice inside a city-state can buy it" },
+			{ "golden_age", CanGoldenAge, CvTypes::getMISSION_GOLDEN_AGE, "only a Great Artist can start a golden age" },
+			{ "culture_bomb", CanCultureBomb, CvTypes::getMISSION_CULTURE_BOMB, "this unit cannot claim land here" },
+			{ "give_policies", CanGivePolicies, CvTypes::getMISSION_GIVE_POLICIES, "only a Great Writer can write a political treatise" },
+			{ "concert_tour", CanConcertTour, CvTypes::getMISSION_ONE_SHOT_TOURISM, "only a Great Musician inside another civilization's land can perform" },
+			{ "create_great_work", CanCreateGreatWork, CvTypes::getMISSION_GREAT_WORK, "this unit cannot create a great work here (needs a free slot in one of your cities)" },
+			{ "build_spaceship_part", CanBuildSpaceship, CvTypes::getMISSION_SPACESHIP, "only a spaceship part inside your capital with the Apollo Program can be assembled" },
+			{ "sell_exotic_goods", CanSellExoticGoods, CvTypes::getMISSION_SELL_EXOTIC_GOODS, "nothing to sell here" },
+			{ "repair_fleet", CanRepairFleet, CvTypes::getMISSION_REPAIR_FLEET, "only a Great Admiral can repair the fleet here" },
+			{ "found_religion", CanFoundReligion, CvTypes::getMISSION_FOUND_RELIGION, "only a Great Prophet in one of your cities can found a religion (then call found_religion)" },
+			{ "spread_religion", CanSpreadReligion, CvTypes::getMISSION_SPREAD_RELIGION, "only a missionary or prophet inside a city can spread religion" },
+			{ "enhance_religion", CanEnhanceReligion, CvTypes::getMISSION_ENHANCE_RELIGION, "only a Great Prophet in one of your cities can enhance your religion (then call enhance_religion)" },
+			{ "remove_heresy", CanRemoveHeresy, CvTypes::getMISSION_REMOVE_HERESY, "only an inquisitor inside one of your cities can remove heresy" },
 		};
 	}
 

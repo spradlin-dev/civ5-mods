@@ -37,6 +37,7 @@
 #include "CvTypes.h"
 
 // Include this after all other headers.
+#include "Claude/ClaudeSeat.h"
 #include "LintFree.h"
 
 // Public Functions...
@@ -8217,6 +8218,8 @@ bool CvPlot::setRevealed(TeamTypes eTeam, bool bNewValue, bool bTerrainOnly, Tea
 							}
 						}
 					}
+
+					ClaudeNoteSeatTeamPopup(eTeam, BUTTONPOPUP_NATURAL_WONDER_REWARD, getX(), getY(), iFinderGold, bFirstFinder, "");
 
 					// If it's the active team then tell them they found something
 					if(eTeam == eActiveTeam)

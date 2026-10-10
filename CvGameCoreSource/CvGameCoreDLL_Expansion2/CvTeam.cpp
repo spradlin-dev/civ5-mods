@@ -32,6 +32,7 @@
 
 #include "CvDllUnit.h"
 
+#include "Claude/ClaudeSeat.h"
 #include "LintFree.h"
 
 // statics
@@ -5686,6 +5687,7 @@ void CvTeam::setHasTech(TechTypes eIndex, bool bNewValue, PlayerTypes ePlayer, b
 			{
 				bool bDontShowRewardPopup = DLLUI->IsOptionNoRewardPopups();
 
+				ClaudeNoteSeatTeamPopup(GetID(), BUTTONPOPUP_TECH_AWARD, 0, 0, eIndex, false, "");
 				// Notification in MP games
 				if(bDontShowRewardPopup || GC.getGame().isNetworkMultiPlayer())
 				{
@@ -6455,6 +6457,7 @@ void CvTeam::SetCurrentEra(EraTypes eNewValue)
 
 				
 				if(!isBarbarian() && (eNewValue != GC.getGame().getStartEra())){
+					ClaudeNoteSeatTeamPopup(GetID(), BUTTONPOPUP_NEW_ERA, eNewValue, 0, 0, false, "");
 					//Era Popup
 					if (!GC.getGame().isNetworkMultiPlayer() && isHuman() && GetID() == GC.getGame().getActiveTeam()){
 						CvPopupInfo kPopupInfo(BUTTONPOPUP_NEW_ERA, eNewValue);

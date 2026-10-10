@@ -13,6 +13,7 @@
 #include "../CvGlobals.h"
 #include "../CvGameCoreUtils.h"
 #include "../CvNotifications.h"
+#include "ClaudeDiplomacy.h"
 #include "../CvDiplomacyAI.h"
 #include "../CvMinorCivAI.h"
 #include "../CvTechClasses.h"
@@ -86,6 +87,8 @@ namespace
 		CvLeaderHeadInfo* pLeader = GC.getLeaderHeadInfo(other.getLeaderType());
 		o["leader"] = J(pLeader ? pLeader->GetDescription() : "");
 		o["at_war"] = J(GET_TEAM(me->getTeam()).isAtWar(other.getTeam()));
+		if(other.getTeam() == me->getTeam()) o["same_team"] = J(true);
+		if(other.isHuman()) o["human"] = J(true);
 		CvDiplomacyAI* pDiplo = other.GetDiplomacyAI();
 		if(pDiplo && !other.isHuman())
 		{
@@ -221,6 +224,9 @@ namespace
 			if(c->CanRangeStrikeNow())
 				pending.push_back(J(ClaudeFormat("city_attack: %s can bombard an enemy this turn", c->getName().c_str())));
 		}
+		int iRequests = ClaudeCountDiploRequests();
+		if(iRequests > 0)
+			pending.push_back(J(ClaudeFormat("diplomacy: %d request(s) from other leaders await your answer (diplomacy, respond_to_request)", iRequests)));
 		if(PolicyChoiceAvailable(me))
 			pending.push_back(J("policy: you can adopt a social policy now (policy_options, adopt_policy)"));
 		for(CvUnit* u = me->firstUnit(&iLoop); u; u = me->nextUnit(&iLoop))
@@ -364,6 +370,7 @@ CLAUDE_TOOL(ToolBriefing)
 	o["threats"] = JVal(BriefingThreats(me));
 	o["warnings"] = JVal(BriefingWarnings(me));
 	o["diplomacy"] = BriefingDiplomacy(me);
+	o["diplomacy_requests"] = ClaudeDiploRequestsJson();
 	o["economy"] = BriefingEconomy(me);
 	o["research"] = ResearchJson(me);
 	return JVal(o);

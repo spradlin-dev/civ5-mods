@@ -59,6 +59,7 @@
 #define LOG_UNIT_MOVES_MESSAGE_OSTR(x)	((void)0)
 #endif
 
+#include "Claude/ClaudeSeat.h"
 // Come back to this
 #include "LintFree.h"
 
@@ -13536,6 +13537,7 @@ void CvUnit::setXY(int iX, int iY, bool bGroup, bool bUpdate, bool bShow, bool b
 							}
 						}
 
+						ClaudeNoteSeatPopup(getOwner(), BUTTONPOPUP_BARBARIAN_CAMP_REWARD, iNumGold, 0, 0, false, "");
 						// If it's the active player then show the popup
 						if(getOwner() == GC.getGame().getActivePlayer())
 						{

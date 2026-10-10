@@ -796,6 +796,18 @@ bool CvNotifications::IsNotificationDismissed(int iZeroBasedIndex)
 	return m_aNotifications[iRealIndex].m_bDismissed;
 }
 
+NotificationTypes CvNotifications::GetNotificationType(int iZeroBasedIndex)
+{
+	int iRealIndex = (m_iNotificationsBeginIndex + iZeroBasedIndex) % m_aNotifications.size();
+	return m_aNotifications[iRealIndex].m_eNotificationType;
+}
+
+int CvNotifications::GetNotificationExtraGameData(int iZeroBasedIndex)
+{
+	int iRealIndex = (m_iNotificationsBeginIndex + iZeroBasedIndex) % m_aNotifications.size();
+	return m_aNotifications[iRealIndex].m_iExtraGameData;
+}
+
 int CvNotifications::GetNotificationX(int iZeroBasedIndex)
 {
 	int iRealIndex = (m_iNotificationsBeginIndex + iZeroBasedIndex) % m_aNotifications.size();

@@ -731,7 +731,7 @@ int CvLuaGame::lClaudeNotePopup(lua_State* L)
 	const int iData3 = lua_tointeger(L, 4);
 	const bool bOption1 = lua_toboolean(L, 5) != 0;
 	const char* szText = lua_tostring(L, 6);
-	ClaudeBridge::Get().NotePopup(iType, iData1, iData2, iData3, bOption1, szText ? szText : "");
+	ClaudeBridge::Get().NotePopup(iType, iData1, iData2, iData3, bOption1, szText ? szText : "", true);
 	return 0;
 }
 //------------------------------------------------------------------------------

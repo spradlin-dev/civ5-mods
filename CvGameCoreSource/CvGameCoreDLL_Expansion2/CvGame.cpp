@@ -63,6 +63,7 @@
 
 // Public Functions...
 // must be included after all other headers
+#include "Claude/ClaudeSeat.h"
 #include "LintFree.h"
 
 //------------------------------------------------------------------------------
@@ -8240,6 +8241,8 @@ void CvGame::updateMoves()
 
 									if(player.isLocalPlayer() && gDLL->sendTurnUnready())
 										player.setEndTurn(false);
+									else if(!player.isLocalPlayer() && ClaudeSeat() == player.GetID())
+										player.setEndTurn(false);
 								}
 							}
 
@@ -8268,8 +8271,10 @@ void CvGame::updateMoves()
 									}
 									else
 									{
-										CvAssertMsg(GC.getGame().getActivePlayer() == player.GetID(), "slewis - We should not need to resolve ambiguous end turns for the AI or remotely.");
+										CvAssertMsg(GC.getGame().getActivePlayer() == player.GetID() || ClaudeSeat() == player.GetID(), "slewis - We should not need to resolve ambiguous end turns for the AI or remotely.");
 										if(player.isLocalPlayer() && gDLL->sendTurnUnready())
+											player.setEndTurn(false);
+										else if(!player.isLocalPlayer() && ClaudeSeat() == player.GetID())
 											player.setEndTurn(false);
 									}
 								}
