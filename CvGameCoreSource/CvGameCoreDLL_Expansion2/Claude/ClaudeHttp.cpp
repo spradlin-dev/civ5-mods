@@ -120,13 +120,15 @@ namespace
 }
 
 ClaudeHttpServer::ClaudeHttpServer()
-	: m_listenSocket(NO_SOCKET), m_clientSocket(NO_SOCKET), m_thread(NULL), m_stop(false), m_handler(NULL)
+	: m_listenSocket(NO_SOCKET), m_thread(NULL), m_stop(false), m_handler(NULL)
 {
+	InitializeCriticalSection(&m_lock);
 }
 
 ClaudeHttpServer::~ClaudeHttpServer()
 {
 	Stop(2000);
+	DeleteCriticalSection(&m_lock);
 }
 
 bool ClaudeHttpServer::Start(unsigned short port, ClaudeHttpHandler handler)
@@ -196,13 +198,57 @@ void ClaudeHttpServer::Stop(unsigned long joinTimeoutMs)
 		closesocket((SOCKET)m_listenSocket);
 		m_listenSocket = NO_SOCKET;
 	}
-	unsigned int client = m_clientSocket;
-	if(client != NO_SOCKET)
-		shutdown((SOCKET)client, SD_BOTH);
 	WaitForSingleObject((HANDLE)m_thread, joinTimeoutMs);
 	CloseHandle((HANDLE)m_thread);
 	m_thread = NULL;
+
+	EnterCriticalSection(&m_lock);
+	std::vector<Connection> open = m_connections;
+	m_connections.clear();
+	LeaveCriticalSection(&m_lock);
+	for(size_t i = 0; i < open.size(); ++i)
+		if(open[i].socket != NO_SOCKET) shutdown((SOCKET)open[i].socket, SD_BOTH);
+	for(size_t i = 0; i < open.size(); ++i)
+	{
+		WaitForSingleObject((HANDLE)open[i].thread, joinTimeoutMs);
+		CloseHandle((HANDLE)open[i].thread);
+	}
 	WSACleanup();
+}
+
+unsigned long __stdcall ClaudeHttpServer::ConnectionMain(void* arg)
+{
+	ConnectionStart* pStart = (ConnectionStart*)arg;
+	ClaudeHttpServer* pServer = pStart->server;
+	unsigned int socket = pStart->socket;
+	delete pStart;
+	pServer->ServeConnection(socket);
+	pServer->MarkClosed(socket);
+	closesocket((SOCKET)socket);
+	return 0;
+}
+
+void ClaudeHttpServer::MarkClosed(unsigned int socket)
+{
+	EnterCriticalSection(&m_lock);
+	for(size_t i = 0; i < m_connections.size(); ++i)
+		if(m_connections[i].socket == socket) m_connections[i].socket = NO_SOCKET;
+	LeaveCriticalSection(&m_lock);
+}
+
+void ClaudeHttpServer::ForgetFinished()
+{
+	EnterCriticalSection(&m_lock);
+	for(size_t i = 0; i < m_connections.size();)
+	{
+		if(WaitForSingleObject((HANDLE)m_connections[i].thread, 0) == WAIT_OBJECT_0)
+		{
+			CloseHandle((HANDLE)m_connections[i].thread);
+			m_connections.erase(m_connections.begin() + i);
+		}
+		else ++i;
+	}
+	LeaveCriticalSection(&m_lock);
 }
 
 unsigned long __stdcall ClaudeHttpServer::ThreadMain(void* arg)
@@ -222,10 +268,24 @@ void ClaudeHttpServer::Run()
 			Sleep(50);
 			continue;
 		}
-		m_clientSocket = (unsigned int)c;
-		ServeConnection((unsigned int)c);
-		m_clientSocket = NO_SOCKET;
-		closesocket(c);
+		ForgetFinished();
+		ConnectionStart* pStart = new ConnectionStart();
+		pStart->server = this;
+		pStart->socket = (unsigned int)c;
+		HANDLE hThread = CreateThread(NULL, 0, ConnectionMain, pStart, CREATE_SUSPENDED, NULL);
+		if(hThread == NULL)
+		{
+			delete pStart;
+			closesocket(c);
+			continue;
+		}
+		Connection conn;
+		conn.socket = (unsigned int)c;
+		conn.thread = hThread;
+		EnterCriticalSection(&m_lock);
+		m_connections.push_back(conn);
+		LeaveCriticalSection(&m_lock);
+		ResumeThread(hThread);
 	}
 }
 

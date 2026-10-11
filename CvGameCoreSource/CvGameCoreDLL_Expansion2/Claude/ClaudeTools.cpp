@@ -373,9 +373,9 @@ CLAUDE_TOOL(ToolMoveUnit)
 	if(dest->isVisible(me->getTeam()))
 	{
 		CvCity* c = dest->getPlotCity();
-		if((c && IsEnemyOf(me, c->getOwner())) || dest->isVisibleEnemyUnit(u))
+		if((c && IsEnemyOf(me, c->getOwner())) || dest->isVisibleEnemyDefender(u))
 		{
-			err = "an enemy is on that tile; use the attack tool instead of move_unit";
+			err = "a defending enemy is on that tile; use the attack tool instead of move_unit (a lone enemy civilian is captured by moving onto it)";
 			return JVal();
 		}
 	}
@@ -493,12 +493,14 @@ CLAUDE_TOOL(ToolSetProduction)
 	ProjectTypes eProject = (eUnit == NO_UNIT && eBuilding == NO_BUILDING) ? FindProjectType(item) : NO_PROJECT;
 	if(eUnit != NO_UNIT)
 	{
-		if(!c->canTrain(eUnit)) { err = "this city cannot train " + item + " right now"; return JVal(); }
+		CvString why;
+		if(!c->canTrain(eUnit, false, false, false, false, &why)) { err = "this city cannot train " + item + " right now: " + std::string(why.c_str()); return JVal(); }
 		c->pushOrder(ORDER_TRAIN, eUnit, -1, false, !bAppend, bAppend);
 	}
 	else if(eBuilding != NO_BUILDING)
 	{
-		if(!c->canConstruct(eBuilding)) { err = "this city cannot build " + item + " right now"; return JVal(); }
+		CvString why;
+		if(!c->canConstruct(eBuilding, false, false, false, &why)) { err = "this city cannot build " + item + " right now: " + std::string(why.c_str()); return JVal(); }
 		c->pushOrder(ORDER_CONSTRUCT, eBuilding, -1, false, !bAppend, bAppend);
 	}
 	else if(eProject != NO_PROJECT)
@@ -770,6 +772,9 @@ namespace
 		{ "make_peace",
 		  "Negotiate peace with a civilization you are at war with. The game's AI sets the terms it will accept (white peace, or a surrender one way or the other); preview_only=true shows them without agreeing.",
 		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"},\"preview_only\":{\"type\":\"boolean\"}},\"required\":[\"civ\"]}", ToolMakePeace, true, false },
+		{ "answer_deal",
+		  "Accept or decline a deal a human proposed to you (listed in diplomacy.requests as human_deal_offer): civ names them, accept is true or false. withdraw=true instead takes back an offer of yours they have not answered.",
+		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"},\"accept\":{\"type\":\"boolean\"},\"withdraw\":{\"type\":\"boolean\"}},\"required\":[\"civ\"]}", ToolAnswerDeal, true, false },
 		{ "demand",
 		  "Demand tribute from an AI civilization: get lists the items (as in propose_deal). They give in only if they fear you; refusals sour relations.",
 		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"},\"get\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}}},\"required\":[\"civ\",\"get\"]}", ToolDemand, true, false },

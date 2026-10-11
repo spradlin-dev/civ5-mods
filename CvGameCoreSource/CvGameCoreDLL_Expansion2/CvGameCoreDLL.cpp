@@ -12,6 +12,7 @@
 #include "CvDllContext.h"
 
 // must be included after all other headers
+#include "Claude/ClaudeCrash.h"
 #include "LintFree.h"
 
 //------------------------------------------------------------------------------
@@ -46,6 +47,7 @@ BOOL APIENTRY DllMain(HANDLE hModule,
 		break;
 	case DLL_PROCESS_DETACH:
 		OutputDebugString("DLL_PROCESS_DETACH\n");
+		ClaudeUninstallCrashHandler(); // a handler left registered past unload crashes the next exception
 		timeEndPeriod(1);
 		CvDllGameContext::DestroySingleton();
 		GC.setDLLIFace(NULL);

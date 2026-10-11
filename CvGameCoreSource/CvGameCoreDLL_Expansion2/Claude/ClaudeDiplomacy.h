@@ -13,6 +13,9 @@ class CvDeal;
 bool ClaudeInterceptRequest(PlayerTypes eFrom, PlayerTypes eTo, DiploUIStateTypes eState, const char* szMessage, int iExtraGameData);
 bool ClaudeInterceptDealRequest(PlayerTypes eFrom, PlayerTypes eTo, const CvDeal* pDeal, DiploUIStateTypes eState, const char* szMessage);
 
+// A proposed deal between humans was accepted, declined, withdrawn or expired.
+void ClaudeNoteDealResolved(PlayerTypes eFrom, PlayerTypes eTo, PlayerTypes eActBy, bool bAccepted, bool bStillValid);
+
 // Requests still waiting for Claude's answer.
 picojson::value ClaudeDiploRequestsJson();
 int ClaudeCountDiploRequests();

@@ -2,10 +2,12 @@
 
 #include <string>
 #include <map>
+#include <vector>
+#include <windows.h>
 
-// Minimal HTTP/1.1 server on a background thread, serving one connection at a
-// time. Knows nothing about the game; every request is handed to the handler
-// callback, which runs on the server thread.
+// Minimal HTTP/1.1 server: an accept thread hands each connection to its own
+// thread, so a request that waits (for a turn) never blocks another. Knows
+// nothing about the game; every request goes to the handler callback.
 struct ClaudeHttpRequest
 {
 	std::string method;
@@ -43,13 +45,20 @@ public:
 
 private:
 	static unsigned long __stdcall ThreadMain(void* arg);
+	static unsigned long __stdcall ConnectionMain(void* arg);
 	void Run();
 	void ServeConnection(unsigned int socket);
+	void ForgetFinished();
+	void MarkClosed(unsigned int socket);
+
+	struct Connection { unsigned int socket; void* thread; };
+	struct ConnectionStart { ClaudeHttpServer* server; unsigned int socket; };
 
 	unsigned int m_listenSocket;
-	volatile unsigned int m_clientSocket;
 	void* m_thread;
 	volatile bool m_stop;
 	ClaudeHttpHandler m_handler;
 	std::string m_lastError;
+	std::vector<Connection> m_connections; // guarded by m_lock
+	CRITICAL_SECTION m_lock;
 };

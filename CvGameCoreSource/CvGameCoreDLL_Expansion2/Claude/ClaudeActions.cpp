@@ -170,7 +170,7 @@ namespace
 		{
 			est["mode"] = J(t.ranged ? "ranged" : "melee");
 			est["target"] = J(UnitTypeName(t.unit->getUnitType()));
-			est["outcome"] = J(t.ranged ? "the civilian is killed" : "the civilian is captured");
+			est["outcome"] = J("the civilian is captured");
 			return JVal(est);
 		}
 		int att = 0, def = 0, dmgToTarget = 0, dmgToMe = 0;

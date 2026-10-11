@@ -25,8 +25,8 @@ namespace
 		CvBeliefEntry* b = GC.GetGameBeliefs()->GetEntry(e);
 		JObj o;
 		o["type"] = J(b ? b->GetType() : "");
-		o["name"] = J(b ? b->GetDescription() : "");
-		o["effect"] = J(b ? Localized(b->getShortDescription()) : std::string());
+		o["name"] = J(b ? Localized(b->getShortDescription()) : std::string());
+		o["effect"] = J(b ? b->GetDescription() : "");
 		return JVal(o);
 	}
 
@@ -43,7 +43,7 @@ namespace
 		for(int i = 0; i < GC.GetGameBeliefs()->GetNumBeliefs(); ++i)
 		{
 			CvBeliefEntry* b = GC.GetGameBeliefs()->GetEntry(i);
-			if(b && MatchesKey(b->GetType(), b->GetDescription(), key)) return (BeliefTypes)i;
+			if(b && MatchesKey(b->GetType(), Localized(b->getShortDescription()).c_str(), key)) return (BeliefTypes)i;
 		}
 		return NO_BELIEF;
 	}
@@ -81,7 +81,7 @@ namespace
 	{
 		JObj o;
 		if(!r) return JVal(o);
-		o["name"] = J(r->GetName().c_str());
+		o["name"] = J(Localized(r->GetName().c_str()));
 		o["founder"] = J(CivName(r->m_eFounder));
 		o["enhanced"] = J(r->m_bEnhanced);
 		CvPlot* p = GC.getMap().plot(r->m_iHolyCityX, r->m_iHolyCityY);

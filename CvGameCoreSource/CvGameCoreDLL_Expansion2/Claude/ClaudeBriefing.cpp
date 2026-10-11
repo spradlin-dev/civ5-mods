@@ -226,7 +226,7 @@ namespace
 		}
 		int iRequests = ClaudeCountDiploRequests();
 		if(iRequests > 0)
-			pending.push_back(J(ClaudeFormat("diplomacy: %d request(s) from other leaders await your answer (diplomacy, respond_to_request)", iRequests)));
+			pending.push_back(J(ClaudeFormat("diplomacy: %d request(s) from other leaders await your answer (diplomacy; respond_to_request, or answer_deal for a human's deal)", iRequests)));
 		if(PolicyChoiceAvailable(me))
 			pending.push_back(J("policy: you can adopt a social policy now (policy_options, adopt_policy)"));
 		for(CvUnit* u = me->firstUnit(&iLoop); u; u = me->nextUnit(&iLoop))

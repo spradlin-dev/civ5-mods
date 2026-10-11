@@ -12,6 +12,8 @@
 #include "CvDiplomacyAI.h"
 #include "CvMinorCivAI.h"
 
+#include "Claude/ClaudeDiplomacy.h"
+
 // must be included after all other headers
 #include "LintFree.h"
 
@@ -139,6 +141,8 @@ CvDeal::CvDeal()
 	m_eRequestingPlayer = NO_PLAYER;
 	m_TradedItems.clear();
 	m_iStartTurn = 0;
+	m_iFinalTurn = 0;
+	m_iDuration = 0;
 	m_bConsideringForRenewal = false;
 	m_bCheckedForRenewal = false;
 	m_bDealCancelled = false;
@@ -149,6 +153,13 @@ CvDeal::CvDeal(PlayerTypes eFromPlayer, PlayerTypes eToPlayer)
 {
 	m_eFromPlayer = eFromPlayer;
 	m_eToPlayer = eToPlayer;
+	m_ePeaceTreatyType = NO_PEACE_TREATY_TYPE;
+	m_eSurrenderingPlayer = NO_PLAYER;
+	m_eDemandingPlayer = NO_PLAYER;
+	m_eRequestingPlayer = NO_PLAYER;
+	m_iStartTurn = 0;
+	m_iFinalTurn = 0;
+	m_iDuration = 0;
 	m_TradedItems.clear();
 	m_bConsideringForRenewal = false;
 	m_bCheckedForRenewal = false;
@@ -2002,6 +2013,76 @@ void CvGameDeals::AddProposedDeal(CvDeal kDeal)
 
 
 /// Moves a deal from the proposed list to the active one (returns FALSE if deal not found)
+bool CvGameDeals::DoPlayerDealFinalized(PlayerTypes eFromPlayer, PlayerTypes eToPlayer, PlayerTypes eActBy, bool bAccepted)
+{
+	CvGame& game = GC.getGame();
+
+	// is the deal valid?
+	bool bFinalized = game.GetGameDeals()->FinalizeDeal(eFromPlayer, eToPlayer, bAccepted);
+	ClaudeNoteDealResolved(eFromPlayer, eToPlayer, eActBy, bAccepted, bFinalized);
+	if(!bFinalized)
+	{
+		Localization::String strMessage;
+		Localization::String strSummary = Localization::Lookup("TXT_KEY_DEAL_EXPIRED");
+
+		CvPlayerAI& kToPlayer = GET_PLAYER(eToPlayer);
+		CvPlayerAI& kFromPlayer = GET_PLAYER(eFromPlayer);
+
+		strMessage = Localization::Lookup("TXT_KEY_DEAL_EXPIRED_FROM_YOU");
+		strMessage << kToPlayer.getNickName();
+		kFromPlayer.GetNotifications()->Add(NOTIFICATION_PLAYER_DEAL_RESOLVED, strMessage.toUTF8(), strSummary.toUTF8(), eToPlayer, -1, -1);
+
+		strMessage = Localization::Lookup("TXT_KEY_DEAL_EXPIRED_FROM_THEM");
+		strMessage << kFromPlayer.getNickName();
+		kToPlayer.GetNotifications()->Add(NOTIFICATION_PLAYER_DEAL_RESOLVED, strMessage.toUTF8(), strSummary.toUTF8(), eFromPlayer, -1, -1);
+	}
+	else
+	{
+		CvPlayerAI& kToPlayer = GET_PLAYER(eToPlayer);
+		CvPlayerAI& kFromPlayer = GET_PLAYER(eFromPlayer);
+		if(bAccepted)
+		{
+			Localization::String strSummary = Localization::Lookup("TXT_KEY_DEAL_ACCEPTED");
+			Localization::String strMessage = Localization::Lookup("TXT_KEY_DEAL_ACCEPTED_BY_THEM");
+			strMessage << kToPlayer.getNickName();
+			kFromPlayer.GetNotifications()->Add(NOTIFICATION_PLAYER_DEAL_RESOLVED, strMessage.toUTF8(), strSummary.toUTF8(), eToPlayer, -1, -1);
+
+			strSummary = Localization::Lookup("TXT_KEY_DEAL_ACCEPTED");
+			strMessage = Localization::Lookup("TXT_KEY_DEAL_ACCEPTED_BY_YOU");
+			strMessage << kFromPlayer.getNickName();
+			kToPlayer.GetNotifications()->Add(NOTIFICATION_PLAYER_DEAL_RESOLVED, strMessage.toUTF8(), strSummary.toUTF8(), eFromPlayer, -1, -1);
+		}
+		else
+		{
+			if(eActBy == eFromPlayer)
+			{
+				Localization::String strSummary = Localization::Lookup("TXT_KEY_DEAL_WITHDRAWN");
+				Localization::String strMessage = Localization::Lookup("TXT_KEY_DEAL_WITHDRAWN_BY_YOU");
+				strMessage << kToPlayer.getNickName();
+				kFromPlayer.GetNotifications()->Add(NOTIFICATION_PLAYER_DEAL_RESOLVED, strMessage.toUTF8(), strSummary.toUTF8(), eToPlayer, -1, -1);
+
+				strSummary = Localization::Lookup("TXT_KEY_DEAL_WITHDRAWN");
+				strMessage = Localization::Lookup("TXT_KEY_DEAL_WITHDRAWN_BY_THEM");
+				strMessage << kFromPlayer.getNickName();
+				kToPlayer.GetNotifications()->Add(NOTIFICATION_PLAYER_DEAL_RESOLVED, strMessage.toUTF8(), strSummary.toUTF8(), eFromPlayer, -1, -1);
+			}
+			else
+			{
+				Localization::String strSummary = Localization::Lookup("TXT_KEY_DEAL_REJECTED");
+				Localization::String strMessage = Localization::Lookup("TXT_KEY_DEAL_REJECTED_BY_THEM");
+				strMessage << kToPlayer.getNickName();
+				kFromPlayer.GetNotifications()->Add(NOTIFICATION_PLAYER_DEAL_RESOLVED, strMessage.toUTF8(), strSummary.toUTF8(), eToPlayer, -1, -1);
+
+				strSummary = Localization::Lookup("TXT_KEY_DEAL_REJECTED");
+				strMessage = Localization::Lookup("TXT_KEY_DEAL_REJECTED_BY_YOU");
+				strMessage << kFromPlayer.getNickName();
+				kToPlayer.GetNotifications()->Add(NOTIFICATION_PLAYER_DEAL_RESOLVED, strMessage.toUTF8(), strSummary.toUTF8(), eFromPlayer, -1, -1);
+			}
+		}
+	}
+	return bFinalized;
+}
+
 bool CvGameDeals::FinalizeDeal(PlayerTypes eFromPlayer, PlayerTypes eToPlayer, bool bAccepted)
 {
 	DealList::iterator dealIt;

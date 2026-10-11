@@ -51,6 +51,7 @@ CLAUDE_TOOL(ToolRespondToRequest);
 CLAUDE_TOOL(ToolProposeDeal);
 CLAUDE_TOOL(ToolMakePeace);
 CLAUDE_TOOL(ToolDemand);
+CLAUDE_TOOL(ToolAnswerDeal);
 CLAUDE_TOOL(ToolDiscuss);
 
 // ClaudeReligion.cpp

@@ -8,6 +8,9 @@
 // Game thread only: looks up game data.
 std::string ClaudeDescribePopup(int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text);
 
+// Not a game popup: a message the bridge composes itself (text is the whole message).
+const int CLAUDE_POPUP_TEXT = 100000;
+
 // For popups that only inform: the InGame dialog context to close on Claude's
 // behalf (the context ids in the game's UI/InGame/InGame.xml); "" otherwise.
 // Pure; safe from any thread.

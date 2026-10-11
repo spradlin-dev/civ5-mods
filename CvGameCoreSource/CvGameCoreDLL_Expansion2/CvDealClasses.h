@@ -247,6 +247,8 @@ public:
 
 	void AddProposedDeal(CvDeal kDeal);
 	bool FinalizeDeal(PlayerTypes eFromPlayer, PlayerTypes eToPlayer, bool bAccepted);
+	// Finalize plus the notifications both players get; what the UI's deal screen triggers.
+	bool DoPlayerDealFinalized(PlayerTypes eFromPlayer, PlayerTypes eToPlayer, PlayerTypes eActBy, bool bAccepted); // false: the deal had expired
 	void DoTurn();
 
 	void DoUpdateCurrentDealsList();

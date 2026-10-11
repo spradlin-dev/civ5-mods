@@ -2,6 +2,7 @@
 #include <deque>
 #include <algorithm>
 #include "ClaudeBridge.h"
+#include "ClaudeCrash.h"
 #include "ClaudeHttp.h"
 #include "ClaudeTools.h"
 #include "ClaudeToolSupport.h"
@@ -48,7 +49,7 @@ namespace
 	void DiagLog(const std::string& msg)
 	{
 		FILogFile* pLog = LOGFILEMGR.GetLog("ClaudePlayer.log", FILogFile::kDontTimeStamp);
-		if(pLog) pLog->Msg(msg.c_str());
+		if(pLog) pLog->Msg("%s", msg.c_str());
 	}
 
 	picojson::value JsonRpcResponse(const picojson::value& id, const picojson::value& result)
@@ -218,6 +219,7 @@ ClaudeBridge::Impl::Impl()
 	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), logSeq(0), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0), gameTurn(-1), testingMode(false),
 	  shuttingDown(false), myTurn(false), screenHumanTurn(false), lastTickMs(0)
 {
+	ClaudeInstallCrashHandler();
 	InitializeCriticalSection(&lock);
 }
 
@@ -233,6 +235,7 @@ ClaudeBridge::Impl::~Impl()
 void ClaudeBridge::Impl::Shutdown()
 {
 	shuttingDown = true;
+	ClaudeUninstallCrashHandler();
 	if(pServer)
 	{
 		EnterCriticalSection(&lock);
@@ -403,7 +406,9 @@ void ClaudeBridge::Impl::RunJob(ClaudeJob* pJob)
 		return;
 	}
 	if(pTool->isAction) LogLine("> " + pJob->tool + " " + picojson::value(pJob->args).serialize());
+	ClaudeCrashSetContext((pJob->tool + " " + picojson::value(pJob->args).serialize()).c_str());
 	pJob->result = pTool->handler(pJob->args, pJob->error);
+	ClaudeCrashSetContext("");
 	if(pTool->isAction && !pJob->error.empty()) LogLine("  => ERROR: " + pJob->error);
 }
 
@@ -424,7 +429,7 @@ void ClaudeBridge::Impl::LogLine(const std::string& text)
 	LeaveCriticalSection(&lock);
 
 	FILogFile* pLog = LOGFILEMGR.GetLog("ClaudeThinking.log", FILogFile::kDontTimeStamp);
-	if(pLog) pLog->Msg(text.c_str());
+	if(pLog) pLog->Msg("%s", text.c_str());
 }
 
 int ClaudeBridge::Impl::GetLogText(std::string& out)

@@ -160,7 +160,7 @@ namespace ClaudeTool
 
 	std::string CivName(PlayerTypes e)
 	{
-		if(e == NO_PLAYER) return "";
+		if(e < 0 || e >= MAX_PLAYERS) return "";
 		CvPlayer& p = GET_PLAYER(e);
 		if(p.isBarbarian()) return "Barbarians";
 		return p.getCivilizationShortDescription();
@@ -419,6 +419,7 @@ namespace ClaudeTool
 		UnitHandle hDefender = p->getBestDefender(NO_PLAYER, me->GetID(), u, true, false, false, true);
 		out.unit = hDefender.pointer();
 		if(!out.unit) { why = "no enemy unit or city on that tile (you must be at war with its owner)"; return false; }
+		if(out.ranged && !out.unit->IsCanDefend()) { why = "only a civilian is on that tile; a ranged shot would kill it, so move a melee unit onto it to capture it instead"; return false; }
 		return true;
 	}
 

@@ -12,6 +12,8 @@
 #include "../CvDealAI.h"
 #include "../CvDiplomacyAI.h"
 #include "../CvDiplomacyRequests.h"
+#include "../CvNotifications.h"
+#include "ClaudePopups.h"
 #include "../CvGlobals.h"
 
 using namespace ClaudeTool;
@@ -249,14 +251,22 @@ namespace
 
 	int StandardDuration() { return GC.getGame().GetDealDuration(); }
 
-	// The human sees it on their trade screen exactly as an offer from a computer leader.
+	// The same path two humans use in multiplayer: the deal waits in the game's proposed
+	// deals and the other player gets a Diplomacy notification that opens their deal screen.
 	bool OfferDealToHuman(CvPlayer* me, CvPlayer* other, CvDeal& deal, JObj& out, std::string& err)
 	{
-		if(other->GetID() != GC.getGame().getActivePlayer()) { err = "only the human on screen can be shown an offer"; return false; }
-		CvDiplomacyRequests::SendDealRequest(me->GetID(), other->GetID(), &deal, DIPLO_UI_STATE_TRADE_AI_MAKES_OFFER, "", LEADERHEAD_ANIM_REQUEST);
+		CvGameDeals* pDeals = GC.getGame().GetGameDeals();
+		if(pDeals->ProposedDealExists(me->GetID(), other->GetID())) { err = "they already have an offer from you waiting; wait for their answer"; return false; }
+		pDeals->AddProposedDeal(deal);
+		CvNotifications* pN = other->GetNotifications();
+		if(pN)
+		{
+			std::string summary = CivName(me->GetID()) + " proposes a deal";
+			pN->Add(NOTIFICATION_PLAYER_DEAL_RECEIVED, (summary + ": open it from the Diplomacy notification to accept or decline").c_str(), summary.c_str(), me->GetID(), -1, -1);
+		}
 		out["ok"] = J(true);
 		out["proposed_to_human"] = J(CivName(other->GetID()));
-		out["offer_shown"] = J(!ClaudeBridge::Get().TestingMode());
+		out["next"] = J("their answer arrives as a game message; the deal stays open until they decide");
 		return true;
 	}
 
@@ -405,8 +415,8 @@ namespace
 		CvTeam& theirs = GET_TEAM(other.getTeam());
 		o["at_war"] = J(mine.isAtWar(other.getTeam()));
 		o["same_team"] = J(other.getTeam() == me->getTeam());
-		o["our_embassy_with_them"] = J(theirs.HasEmbassyAtTeam(me->getTeam()));
-		o["their_embassy_with_us"] = J(mine.HasEmbassyAtTeam(other.getTeam()));
+		o["our_embassy_with_them"] = J(mine.HasEmbassyAtTeam(other.getTeam()));
+		o["their_embassy_with_us"] = J(theirs.HasEmbassyAtTeam(me->getTeam()));
 		o["open_borders_for_us"] = J(theirs.IsAllowsOpenBordersToTeam(me->getTeam()));
 		o["open_borders_for_them"] = J(mine.IsAllowsOpenBordersToTeam(other.getTeam()));
 		o["defensive_pact"] = J(mine.IsHasDefensivePact(other.getTeam()));
@@ -426,6 +436,20 @@ namespace
 
 // ------------------------------------------------------------- hooks
 
+void ClaudeNoteDealResolved(PlayerTypes eFrom, PlayerTypes eTo, PlayerTypes eActBy, bool bAccepted, bool bStillValid)
+{
+	PlayerTypes eSeat = ClaudeSeat();
+	if(eSeat == NO_PLAYER || ClaudeSeatOnScreen() || (eFrom != eSeat && eTo != eSeat)) return;
+	if(eActBy == eSeat) return; // the tool that acted already reported the result
+	PlayerTypes eOther = (eFrom == eSeat) ? eTo : eFrom;
+	std::string what = (eFrom == eSeat) ? "your offer" : "their offer";
+	std::string text;
+	if(!bStillValid) text = CivName(eOther) + ": " + what + " expired; something in it is no longer available";
+	else if(bAccepted) text = CivName(eOther) + " accepted " + what + "; the deal is in force";
+	else text = CivName(eOther) + " declined " + what;
+	ClaudeBridge::Get().NotePopup(CLAUDE_POPUP_TEXT, 0, 0, 0, false, text, false);
+}
+
 bool ClaudeInterceptRequest(PlayerTypes eFrom, PlayerTypes eTo, DiploUIStateTypes eState, const char* szMessage, int iExtraGameData)
 {
 	if(DropForIdleHuman(eTo)) return true;
@@ -442,16 +466,85 @@ bool ClaudeInterceptDealRequest(PlayerTypes eFrom, PlayerTypes eTo, const CvDeal
 	return true;
 }
 
+namespace
+{
+	// Humans with a deal waiting between them and the seat (the game keeps one per direction).
+	// list NULL just counts the ones waiting for the seat's answer.
+	int ProposedDealsWithSeat(JArr* list)
+	{
+		int n = 0;
+		PlayerTypes eSeat = ClaudeSeat();
+		if(eSeat == NO_PLAYER) return 0;
+		CvGameDeals* pDeals = GC.getGame().GetGameDeals();
+		for(int i = 0; i < MAX_MAJOR_CIVS; ++i)
+		{
+			PlayerTypes e = (PlayerTypes)i;
+			if(e == eSeat || !GET_PLAYER(e).isAlive() || !GET_PLAYER(e).isHuman()) continue;
+			if(pDeals->ProposedDealExists(e, eSeat))
+			{
+				++n;
+				if(list)
+				{
+					JObj o;
+					o["from"] = J(CivName(e));
+					o["kind"] = J("human_deal_offer");
+					o["deal"] = DealJson(*pDeals->GetProposedDeal(e, eSeat));
+					o["choices"] = J("answer_deal with civ and accept true or false");
+					list->push_back(JVal(o));
+				}
+			}
+			if(list && pDeals->ProposedDealExists(eSeat, e))
+			{
+				JObj o;
+				o["to"] = J(CivName(e));
+				o["kind"] = J("your_offer_awaiting_their_answer");
+				o["deal"] = DealJson(*pDeals->GetProposedDeal(eSeat, e));
+				o["choices"] = J("wait, or answer_deal with civ and withdraw true");
+				list->push_back(JVal(o));
+			}
+		}
+		return n;
+	}
+}
+
 picojson::value ClaudeDiploRequestsJson()
 {
 	JArr list;
 	for(size_t i = 0; i < s_requests.size(); ++i) list.push_back(RequestJson(s_requests[i]));
+	ProposedDealsWithSeat(&list);
 	return JVal(list);
 }
 
 int ClaudeCountDiploRequests()
 {
-	return (int)s_requests.size();
+	return (int)s_requests.size() + ProposedDealsWithSeat(NULL);
+}
+
+CLAUDE_TOOL(ToolAnswerDeal)
+{
+	CvPlayer* me = MeActing(err);
+	if(!me) return JVal();
+	CvPlayer* other = OtherMajor(me, args, err);
+	if(!other) return JVal();
+	if(!other->isHuman()) { err = "only a human proposes deals this way; computer leaders' offers are answered with respond_to_request"; return JVal(); }
+	CvGameDeals* pDeals = GC.getGame().GetGameDeals();
+	JObj o;
+	if(ArgBool(args, "withdraw", false))
+	{
+		if(!pDeals->ProposedDealExists(me->GetID(), other->GetID())) { err = "you have no offer waiting with them"; return JVal(); }
+		o["deal"] = DealJson(*pDeals->GetProposedDeal(me->GetID(), other->GetID()));
+		pDeals->DoPlayerDealFinalized(me->GetID(), other->GetID(), me->GetID(), false);
+		o["ok"] = J(true);
+		o["answered"] = J("withdrawn");
+		return JVal(o);
+	}
+	if(!pDeals->ProposedDealExists(other->GetID(), me->GetID())) { err = "they have no deal waiting for your answer"; return JVal(); }
+	bool bAccept = ArgBool(args, "accept", false);
+	o["deal"] = DealJson(*pDeals->GetProposedDeal(other->GetID(), me->GetID()));
+	if(!pDeals->DoPlayerDealFinalized(other->GetID(), me->GetID(), me->GetID(), bAccept)) { err = "the deal expired: something in it is no longer available"; return JVal(); }
+	o["ok"] = J(true);
+	o["answered"] = J(bAccept ? "accepted" : "declined");
+	return JVal(o);
 }
 
 void ClaudeResetDiploRequests()

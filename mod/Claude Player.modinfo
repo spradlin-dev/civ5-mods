@@ -7,6 +7,7 @@
     <Authors>Jason Spradlin</Authors>
     <HideSetupGame>0</HideSetupGame>
     <AffectsSavedGames>1</AffectsSavedGames>
+    <MinCompatibleSaveVersion>0</MinCompatibleSaveVersion>
     <SupportsSinglePlayer>1</SupportsSinglePlayer>
     <SupportsMultiplayer>0</SupportsMultiplayer>
     <SupportsHotSeat>0</SupportsHotSeat>

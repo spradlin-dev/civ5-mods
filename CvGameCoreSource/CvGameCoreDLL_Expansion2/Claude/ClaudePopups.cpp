@@ -34,6 +34,7 @@ const char* ClaudePopupDialogToClose(int iType)
 
 std::string ClaudeDescribePopup(int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text)
 {
+	if(iType == CLAUDE_POPUP_TEXT) return text;
 	switch(iType)
 	{
 	case BUTTONPOPUP_GOODY_HUT_REWARD:
