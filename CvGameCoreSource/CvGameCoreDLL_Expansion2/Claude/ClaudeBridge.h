@@ -65,6 +65,12 @@ public:
 	std::vector<ClaudeModInfo> ActiveMods();
 	void SetActiveMods(const std::vector<ClaudeModInfo>& mods);
 
+	// Any thread. The game's settings and mods go to the model once per MCP session and
+	// per loaded game (marked when the UI reports that game's mods), in the next status;
+	// Take returns true at most once per mark.
+	bool TakeGameBriefingDue();
+	void MarkGameBriefingDue();
+
 	// Game thread. Appends to the in-game log, inserting a separator when the turn changed.
 	void LogLine(const char* category, const std::string& text);
 

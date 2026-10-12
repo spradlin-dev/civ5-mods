@@ -156,6 +156,15 @@ CLAUDE_TOOL(ToolStatus)
 	}
 	std::string label = ClaudeIdentityLabel();
 	o["playing_as"] = J(label.empty() ? std::string("nobody yet: call set_identity before acting") : label);
+	// Mods arrive from the UI a moment after the map loads; hold the briefing until they have.
+	if(!ClaudeBridge::Get().ActiveMods().empty() && ClaudeBridge::Get().TakeGameBriefingDue())
+	{
+		std::string ignored;
+		o["game_settings"] = ToolGameSettings(JObj(), ignored);
+		JVal modsDetail = ToolMods(JObj(), ignored);
+		o["mods"] = modsDetail.get<JObj>()["mods"];
+		o["remember"] = J("store game_settings and mods with your memories for this game_id; they come once per connection and per loaded game");
+	}
 	return JVal(o);
 }
 

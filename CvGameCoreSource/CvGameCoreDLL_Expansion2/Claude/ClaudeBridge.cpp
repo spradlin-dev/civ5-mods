@@ -103,6 +103,7 @@ struct ClaudeBridge::Impl
 	std::deque<ClaudeLogEntry> log;
 	ClaudeIdentity identity;
 	std::vector<ClaudeModInfo> activeMods;
+	bool gameBriefingDue;
 	volatile int identityVersion; // bumped on every change; Tick relabels the seat when it moves
 	int labelledIdentityVersion;  // game thread
 	int logSeq;
@@ -183,6 +184,23 @@ void ClaudeBridge::SetActiveMods(const std::vector<ClaudeModInfo>& mods)
 {
 	EnterCriticalSection(&m_pImpl->lock);
 	m_pImpl->activeMods = mods;
+	m_pImpl->gameBriefingDue = true; // the UI reports mods once per loaded game
+	LeaveCriticalSection(&m_pImpl->lock);
+}
+
+bool ClaudeBridge::TakeGameBriefingDue()
+{
+	EnterCriticalSection(&m_pImpl->lock);
+	bool bDue = m_pImpl->gameBriefingDue;
+	m_pImpl->gameBriefingDue = false;
+	LeaveCriticalSection(&m_pImpl->lock);
+	return bDue;
+}
+
+void ClaudeBridge::MarkGameBriefingDue()
+{
+	EnterCriticalSection(&m_pImpl->lock);
+	m_pImpl->gameBriefingDue = true;
 	LeaveCriticalSection(&m_pImpl->lock);
 }
 
@@ -257,7 +275,7 @@ std::vector<ClaudePopup> ClaudeBridge::GetPopupsSince(int iTurn)
 }
 
 ClaudeBridge::Impl::Impl()
-	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), logSeq(0), logVisible(true), identityVersion(0), labelledIdentityVersion(-1), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0), gameTurn(-1), testingMode(false),
+	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), logSeq(0), gameBriefingDue(true), logVisible(true), identityVersion(0), labelledIdentityVersion(-1), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0), gameTurn(-1), testingMode(false),
 	  shuttingDown(false), myTurn(false), screenHumanTurn(false), lastTickMs(0)
 {
 	ClaudeInstallCrashHandler();
@@ -597,6 +615,7 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bo
 	if(method == "initialize")
 	{
 		ClaudeBridge::Get().SetIdentity(ClaudeIdentity());
+		ClaudeBridge::Get().MarkGameBriefingDue();
 		std::string version = "2025-06-18";
 		picojson::object::const_iterator itV = params.find("protocolVersion");
 		if(itV != params.end() && itV->second.is<std::string>() && !itV->second.get<std::string>().empty())
@@ -621,10 +640,10 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bo
 		    "status.game_id names this game across reloads and reconnections: keep your memories about this game "
 		    "(your role, plans, what you learned about the other players) under that id, keep lessons for every game separate, "
 		    "and when you connect, look up your memories for this game_id before you play. "
-		    "On every connection call game_settings once (era, map, difficulty, victory types and the game options that change the rules, "
-		    "such as no happiness) and record it with your memories for this game_id. "
-		    "The mods loaded in this game can change between loads: on every connection call the mods tool once (names and what each does), "
-		    "compare it with what you remembered for this game_id and record the current list; status.mods repeats just the names. "
+		    "The first status after you connect, or after another game is loaded, also carries game_settings (era, map, difficulty, "
+		    "victory types and the game options that change the rules, such as no happiness) and the loaded mods with what each does. "
+		    "Store both with your memories for this game_id; mods can change between loads, so compare them with what you remembered. "
+		    "Later statuses list only the mod names; the game_settings and mods tools show the full detail again. "
 		    "Right after naming yourself, call status and tell the human in your reply who you are and what you play: "
 		    "their own civilization, a teammate (name it), or an opponent (never name it; they will see you once they meet you). "
 		    "If no seat is claimed and the human has not told you your role, ask them first and offer the choices: "
