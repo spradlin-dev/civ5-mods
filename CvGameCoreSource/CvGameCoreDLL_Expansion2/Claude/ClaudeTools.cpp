@@ -133,12 +133,21 @@ CLAUDE_TOOL(ToolUnitOptions)
 	CvPlot* p = u->plot();
 	JObj o;
 	o["unit"] = UnitJson(u);
-	JArr actions;
+	JArr actions, waiting;
 	size_t count = 0;
 	const UnitActionDef* defs = UnitActions(count);
 	for(size_t i = 0; i < count; ++i)
-		if(defs[i].can(u, p)) actions.push_back(J(defs[i].name));
+	{
+		if(!defs[i].can(u, p)) continue;
+		if(defs[i].needsMoves && !u->canMove()) waiting.push_back(J(defs[i].name));
+		else actions.push_back(J(defs[i].name));
+	}
 	o["actions"] = JVal(actions);
+	if(!waiting.empty())
+	{
+		o["actions_needing_moves"] = JVal(waiting);
+		o["moves_note"] = J("the unit has no moves left this turn, so the actions_needing_moves can be used next turn");
+	}
 
 	JArr builds;
 	for(int i = 0; i < GC.getNumBuildInfos(); ++i)
@@ -429,7 +438,7 @@ CLAUDE_TOOL(ToolUnitAction)
 	if(action == "rebase")
 	{
 		int x = 0, y = 0;
-		if(!RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
+		if(!RequireMoves(u, err) || !RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
 		if(!u->canRebaseAt(p, x, y)) { err = "this unit cannot rebase there (not an aircraft, out of range, or no city or carrier of yours at the tile)"; return JVal(); }
 		NetMessageScope scope;
 		u->PushMission(CvTypes::getMISSION_REBASE(), x, y);
@@ -440,8 +449,8 @@ CLAUDE_TOOL(ToolUnitAction)
 	if(action == "air_sweep")
 	{
 		int x = 0, y = 0;
-		if(!RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
-		if(!u->canAirSweepAt(x, y)) { err = "this unit cannot sweep that tile (not a fighter, out of range, or no moves left)"; return JVal(); }
+		if(!RequireMoves(u, err) || !RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
+		if(!u->canAirSweepAt(x, y)) { err = "this unit cannot sweep that tile (not a fighter, out of range, or it already attacked this turn)"; return JVal(); }
 		NetMessageScope scope;
 		u->PushMission(CvTypes::getMISSION_AIR_SWEEP(), x, y);
 		o["ok"] = J(true);
@@ -451,7 +460,7 @@ CLAUDE_TOOL(ToolUnitAction)
 	if(action == "paradrop")
 	{
 		int x = 0, y = 0;
-		if(!RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
+		if(!RequireMoves(u, err) || !RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
 		if(!u->canParadropAt(p, x, y)) { err = "this unit cannot drop there (not a paratrooper, must start in your territory, target within range and not enemy-held)"; return JVal(); }
 		NetMessageScope scope;
 		u->PushMission(CvTypes::getMISSION_PARADROP(), x, y);
@@ -462,7 +471,7 @@ CLAUDE_TOOL(ToolUnitAction)
 	if(action == "nuke")
 	{
 		int x = 0, y = 0;
-		if(!RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
+		if(!RequireMoves(u, err) || !RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
 		if(!u->canNukeAt(p, x, y)) { err = "this unit cannot strike that tile (not a nuclear weapon, out of range, or the blast would hit someone you cannot declare war on)"; return JVal(); }
 		CvPlot* pTarget = GC.getMap().plot(x, y);
 		if(!pTarget) { err = "that tile is off the map"; return JVal(); }
@@ -499,7 +508,7 @@ CLAUDE_TOOL(ToolUnitAction)
 		const UnitActionDef& def = defs[i];
 		if(action != def.name) continue;
 		if(!def.can(u, p)) { err = def.refusal; return JVal(); }
-		if(action == "found_city" && !u->canMove()) { err = "the settler has no moves left this turn; found the city next turn"; return JVal(); }
+		if(def.needsMoves && !RequireMoves(u, err)) return JVal();
 		{
 			NetMessageScope scope;
 			u->PushMission(def.mission());

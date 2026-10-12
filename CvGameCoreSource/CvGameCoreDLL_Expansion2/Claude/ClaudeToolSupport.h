@@ -39,6 +39,7 @@ namespace ClaudeTool
 	// True when key names the entry by its type string or its displayed name.
 	bool MatchesKey(const char* szType, const char* szDescription, const std::string& key);
 	CvUnit* RequireUnit(CvPlayer* me, const JObj& args, std::string& err);
+	bool RequireMoves(CvUnit* u, std::string& err);
 	CvCity* RequireCity(CvPlayer* me, const JObj& args, std::string& err);
 	// Only while the turn is open; use for every tool that changes game state.
 	CvPlayer* MeActing(std::string& err);
@@ -128,6 +129,7 @@ namespace ClaudeTool
 		bool (*can)(CvUnit*, CvPlot*);
 		const MissionTypes (*mission)();
 		const char* refusal;
+		bool needsMoves; // false for the resting missions; the game queues any other mission without running it while the unit cannot move
 	};
 	const UnitActionDef* UnitActions(size_t& count);
 	std::string UnitActionNames();

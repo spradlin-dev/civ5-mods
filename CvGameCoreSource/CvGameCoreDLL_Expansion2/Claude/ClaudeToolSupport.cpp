@@ -307,6 +307,13 @@ namespace ClaudeTool
 		return u;
 	}
 
+	bool RequireMoves(CvUnit* u, std::string& err)
+	{
+		if(u->canMove()) return true;
+		err = "this unit has no moves left this turn; try again next turn";
+		return false;
+	}
+
 	CvCity* RequireCity(CvPlayer* me, const JObj& args, std::string& err)
 	{
 		int iCity = 0;
@@ -487,29 +494,29 @@ namespace ClaudeTool
 
 		const UnitActionDef UNIT_ACTIONS[] =
 		{
-			{ "found_city", CanFound,   CvTypes::getMISSION_FOUND,   "cannot found a city here (not a settler, too close to another city, or bad terrain)" },
-			{ "fortify",    CanFortify, CvTypes::getMISSION_FORTIFY, "unit cannot fortify (non-combat units sleep instead)" },
-			{ "sleep",      CanSleep,   CvTypes::getMISSION_SLEEP,   "unit cannot sleep here" },
-			{ "skip",       CanHold,    CvTypes::getMISSION_SKIP,    "unit cannot skip its turn" },
-			{ "alert",      CanSentry,  CvTypes::getMISSION_ALERT,   "unit cannot go on alert here" },
-			{ "heal",       CanHeal,    CvTypes::getMISSION_HEAL,    "unit cannot heal here (full health, or healing not allowed on this tile)" },
-			{ "pillage",    CanPillage, CvTypes::getMISSION_PILLAGE, "nothing to pillage here or unit cannot pillage" },
-			{ "discover",   CanDiscover, CvTypes::getMISSION_DISCOVER, "only a Great Scientist can discover a technology" },
-			{ "hurry_production", CanHurry, CvTypes::getMISSION_HURRY, "only a Great Engineer inside one of your cities can hurry production" },
-			{ "trade_mission", CanTradeMission, CvTypes::getMISSION_TRADE, "only a Great Merchant inside a city-state can run a trade mission" },
-			{ "buy_city_state", CanBuyCityState, CvTypes::getMISSION_BUY_CITY_STATE, "only Venice's Merchant of Venice inside a city-state can buy it" },
-			{ "golden_age", CanGoldenAge, CvTypes::getMISSION_GOLDEN_AGE, "only a Great Artist can start a golden age" },
-			{ "culture_bomb", CanCultureBomb, CvTypes::getMISSION_CULTURE_BOMB, "this unit cannot claim land here" },
-			{ "give_policies", CanGivePolicies, CvTypes::getMISSION_GIVE_POLICIES, "only a Great Writer can write a political treatise" },
-			{ "concert_tour", CanConcertTour, CvTypes::getMISSION_ONE_SHOT_TOURISM, "only a Great Musician inside another civilization's land can perform" },
-			{ "create_great_work", CanCreateGreatWork, CvTypes::getMISSION_GREAT_WORK, "this unit cannot create a great work here (needs a free slot in one of your cities)" },
-			{ "build_spaceship_part", CanBuildSpaceship, CvTypes::getMISSION_SPACESHIP, "only a spaceship part inside your capital with the Apollo Program can be assembled" },
-			{ "sell_exotic_goods", CanSellExoticGoods, CvTypes::getMISSION_SELL_EXOTIC_GOODS, "nothing to sell here" },
-			{ "repair_fleet", CanRepairFleet, CvTypes::getMISSION_REPAIR_FLEET, "only a Great Admiral can repair the fleet here" },
-			{ "found_religion", CanFoundReligion, CvTypes::getMISSION_FOUND_RELIGION, "only a Great Prophet in one of your cities can found a religion (then call found_religion)" },
-			{ "spread_religion", CanSpreadReligion, CvTypes::getMISSION_SPREAD_RELIGION, "only a missionary or prophet inside a city can spread religion" },
-			{ "enhance_religion", CanEnhanceReligion, CvTypes::getMISSION_ENHANCE_RELIGION, "only a Great Prophet in one of your cities can enhance your religion (then call enhance_religion)" },
-			{ "remove_heresy", CanRemoveHeresy, CvTypes::getMISSION_REMOVE_HERESY, "only an inquisitor inside one of your cities can remove heresy" },
+			{ "found_city", CanFound,   CvTypes::getMISSION_FOUND,   "cannot found a city here (not a settler, too close to another city, or bad terrain)", true },
+			{ "fortify",    CanFortify, CvTypes::getMISSION_FORTIFY, "unit cannot fortify (non-combat units sleep instead)", false },
+			{ "sleep",      CanSleep,   CvTypes::getMISSION_SLEEP,   "unit cannot sleep here", false },
+			{ "skip",       CanHold,    CvTypes::getMISSION_SKIP,    "unit cannot skip its turn", false },
+			{ "alert",      CanSentry,  CvTypes::getMISSION_ALERT,   "unit cannot go on alert here", false },
+			{ "heal",       CanHeal,    CvTypes::getMISSION_HEAL,    "unit cannot heal here (full health, or healing not allowed on this tile)", false },
+			{ "pillage",    CanPillage, CvTypes::getMISSION_PILLAGE, "nothing to pillage here or unit cannot pillage", true },
+			{ "discover",   CanDiscover, CvTypes::getMISSION_DISCOVER, "only a Great Scientist can discover a technology", true },
+			{ "hurry_production", CanHurry, CvTypes::getMISSION_HURRY, "only a Great Engineer inside one of your cities can hurry production", true },
+			{ "trade_mission", CanTradeMission, CvTypes::getMISSION_TRADE, "only a Great Merchant inside a city-state can run a trade mission", true },
+			{ "buy_city_state", CanBuyCityState, CvTypes::getMISSION_BUY_CITY_STATE, "only Venice's Merchant of Venice inside a city-state can buy it", true },
+			{ "golden_age", CanGoldenAge, CvTypes::getMISSION_GOLDEN_AGE, "only a Great Artist can start a golden age", true },
+			{ "culture_bomb", CanCultureBomb, CvTypes::getMISSION_CULTURE_BOMB, "this unit cannot claim land here", true },
+			{ "give_policies", CanGivePolicies, CvTypes::getMISSION_GIVE_POLICIES, "only a Great Writer can write a political treatise", true },
+			{ "concert_tour", CanConcertTour, CvTypes::getMISSION_ONE_SHOT_TOURISM, "only a Great Musician inside another civilization's land can perform", true },
+			{ "create_great_work", CanCreateGreatWork, CvTypes::getMISSION_GREAT_WORK, "this unit cannot create a great work here (needs a free slot in one of your cities)", true },
+			{ "build_spaceship_part", CanBuildSpaceship, CvTypes::getMISSION_SPACESHIP, "only a spaceship part inside your capital with the Apollo Program can be assembled", true },
+			{ "sell_exotic_goods", CanSellExoticGoods, CvTypes::getMISSION_SELL_EXOTIC_GOODS, "nothing to sell here", true },
+			{ "repair_fleet", CanRepairFleet, CvTypes::getMISSION_REPAIR_FLEET, "only a Great Admiral can repair the fleet here", true },
+			{ "found_religion", CanFoundReligion, CvTypes::getMISSION_FOUND_RELIGION, "only a Great Prophet in one of your cities can found a religion (then call found_religion)", true },
+			{ "spread_religion", CanSpreadReligion, CvTypes::getMISSION_SPREAD_RELIGION, "only a missionary or prophet inside a city can spread religion", true },
+			{ "enhance_religion", CanEnhanceReligion, CvTypes::getMISSION_ENHANCE_RELIGION, "only a Great Prophet in one of your cities can enhance your religion (then call enhance_religion)", true },
+			{ "remove_heresy", CanRemoveHeresy, CvTypes::getMISSION_REMOVE_HERESY, "only an inquisitor inside one of your cities can remove heresy", true },
 		};
 	}
 
