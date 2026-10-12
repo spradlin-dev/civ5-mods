@@ -577,7 +577,9 @@ void CvCity::init(int iID, PlayerTypes eOwner, int iX, int iY, bool bBumpUnits, 
 
 	AI_init();
 
-	if (GC.getGame().getGameTurn() == 0)
+	// A city founded by a settler asks for production at once, so the turn cannot
+	// auto-end before its owner has chosen; the stock game asked only on turn 0.
+	if (GC.getGame().getGameTurn() == 0 || bInitialFounding)
 	{
 		chooseProduction();
 	}
