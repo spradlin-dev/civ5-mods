@@ -5,8 +5,8 @@ $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $dll = Join-Path $root 'CvGameCoreSource\BuildOutput\VS2008_ModWin32\CvGameCoreDLL_Expansion2Win32Mod.dll'
 $modSrc = Join-Path $root 'mod'
-$modDir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "My Games\Sid Meier's Civilization 5\MODS\Claude Player (v 1)"
-$modinfoName = 'Claude Player.modinfo'
+$modDir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "My Games\Sid Meier's Civilization 5\MODS\ClaudePlayer (v 1)"
+$modinfoName = 'ClaudePlayer.modinfo'
 
 if (-not (Test-Path $dll)) { throw "DLL not built: $dll" }
 New-Item -ItemType Directory -Force $modDir | Out-Null
