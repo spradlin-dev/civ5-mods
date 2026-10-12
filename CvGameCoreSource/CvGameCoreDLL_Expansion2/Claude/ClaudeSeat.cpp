@@ -83,6 +83,14 @@ bool ClaudeReleaseSeat(std::string& err)
 	return true;
 }
 
+bool ClaudeLogVisibleOnScreen()
+{
+	PlayerTypes eSeat = ClaudeSeat();
+	PlayerTypes eActive = GC.getGame().getActivePlayer();
+	if(eSeat == NO_PLAYER || eActive == NO_PLAYER) return true;
+	return GET_PLAYER(eSeat).getTeam() == GET_PLAYER(eActive).getTeam();
+}
+
 std::string ClaudeIdentityLabel()
 {
 	ClaudeIdentity id = ClaudeBridge::Get().Identity();
@@ -116,7 +124,13 @@ void ClaudeNoteSeatNotification(PlayerTypes ePlayer, const char* szMessage, cons
 {
 	if(ePlayer == NO_PLAYER || ePlayer != ClaudeSeat()) return;
 	const char* szText = (szMessage && *szMessage) ? szMessage : szSummary;
-	if(szText && *szText) ClaudeBridge::Get().LogLine(CLAUDE_LOG_NOTIFICATIONS, std::string("Notification: ") + szText);
+	if(!szText || !*szText) return;
+	// City-state quest notifications end with the game's "RIGHT-CLICK to dismiss" hint, meant for the notification panel.
+	std::string text = szText;
+	std::string dismiss = Localization::Lookup("TXT_KEY_MINOR_QUEST_BLOCKING_TT").toUTF8();
+	size_t at = text.find(dismiss);
+	if(at != std::string::npos) text.erase(at);
+	ClaudeBridge::Get().LogLine(CLAUDE_LOG_NOTIFICATIONS, "Notification: " + text);
 }
 
 void ClaudeNoteSeatTeamPopup(TeamTypes eTeam, int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text)

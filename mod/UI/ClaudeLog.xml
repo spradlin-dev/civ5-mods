@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Context ColorSet="Beige_Black" Font="TwCenMT14" FontStyle="Shadow">
 	<Instance Name="LineInstance">
-		<Label ID="Text" Anchor="L,T" Offset="0,0" WrapWidth="680" Font="TwCenMT18" FontStyle="Shadow" ColorSet="Beige_Black_Alpha" />
+		<Label ID="Text" Anchor="L,T" Offset="0,0" WrapWidth="680" LeadingOffset="-5" Font="TwCenMT18" FontStyle="Shadow" ColorSet="Beige_Black_Alpha" />
 	</Instance>
 
 	<Instance Name="FilterInstance">
@@ -14,12 +14,12 @@
 		<Label ID="OpenButtonLabel" Anchor="C,C" String="AI Log" Font="TwCenMT14" ColorSet="Beige_Black_Alpha" FontStyle="Shadow" />
 	</GridButton>
 
-	<Grid ID="Popup" Size="760,660" Anchor="R,T" Offset="20,40" Padding="0,0" Style="Grid9DetailFive140" ConsumeMouse="1" Hidden="1">
+	<Grid ID="Popup" Size="760,684" Anchor="R,T" Offset="20,40" Padding="0,0" Style="Grid9DetailFive140" ConsumeMouse="1" Hidden="1">
 		<Label ID="Title" Anchor="C,T" Offset="0,18" Font="TwCenMT20" FontStyle="Shadow" ColorSet="Beige_Black_Alpha" String="AI Log" />
 
 		<Stack ID="FilterStack" Anchor="L,T" Offset="34,50" StackGrowth="Right" WrapGrowth="Bottom" WrapWidth="700" />
 
-		<ScrollPanel ID="ScrollPanel" Anchor="C,T" Offset="0,140" Size="700,450" Vertical="1" AutoScrollBar="1">
+		<ScrollPanel ID="ScrollPanel" Anchor="C,T" Offset="0,164" Size="700,450" Vertical="1" AutoScrollBar="1">
 			<Stack ID="LineStack" Anchor="L,T" Offset="0,0" StackGrowth="Bottom" Padding="2" />
 			<ScrollBar Style="VertSlider" Offset="0,18" Anchor="R,T" AnchorSide="O,I" Length="414" />
 			<UpButton Style="ScrollBarUp" Offset="0,0" Anchor="R,T" AnchorSide="O,I" />

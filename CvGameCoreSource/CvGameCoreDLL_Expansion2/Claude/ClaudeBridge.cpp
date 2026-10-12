@@ -119,6 +119,7 @@ struct ClaudeBridge::Impl
 	volatile bool shuttingDown;
 	volatile bool myTurn;
 	volatile bool screenHumanTurn; // the human on screen (not Claude's seat) may act
+	volatile bool logVisible;
 	volatile DWORD lastTickMs;
 
 	Impl();
@@ -158,6 +159,8 @@ ClaudeBridge::~ClaudeBridge() { delete m_pImpl; }
 void ClaudeBridge::Tick() { m_pImpl->Tick(); }
 void ClaudeBridge::Shutdown() { m_pImpl->Shutdown(); }
 void ClaudeBridge::LogLine(const char* category, const std::string& text) { m_pImpl->LogLine(category, text); }
+
+bool ClaudeBridge::LogVisibleOnScreen() const { return m_pImpl->logVisible; }
 
 ClaudeIdentity ClaudeBridge::Identity()
 {
@@ -238,7 +241,7 @@ std::vector<ClaudePopup> ClaudeBridge::GetPopupsSince(int iTurn)
 }
 
 ClaudeBridge::Impl::Impl()
-	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), logSeq(0), identityVersion(0), labelledIdentityVersion(-1), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0), gameTurn(-1), testingMode(false),
+	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), logSeq(0), logVisible(true), identityVersion(0), labelledIdentityVersion(-1), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0), gameTurn(-1), testingMode(false),
 	  shuttingDown(false), myTurn(false), screenHumanTurn(false), lastTickMs(0)
 {
 	ClaudeInstallCrashHandler();
@@ -317,6 +320,7 @@ void ClaudeBridge::Impl::Tick()
 	int iTurn = GC.getGame().getGameTurn();
 	if(CvPreGame::mapRandomSeed() != gameSeed || iTurn < gameTurn) ResetForNewGame();
 	gameTurn = iTurn;
+	logVisible = ClaudeLogVisibleOnScreen();
 	if(identityVersion != labelledIdentityVersion)
 	{
 		labelledIdentityVersion = identityVersion;

@@ -713,11 +713,14 @@ int CvLuaGame::lGetGameTurn(lua_State* L)
 	return BasicLuaMethod(L, &CvGame::getGameTurn);
 }
 //------------------------------------------------------------------------------
-//int, table GetClaudeLog(); the table lists { Category = string, Text = string } entries, oldest first.
+//int, table, bool GetClaudeLog(); the table lists { Category = string, Text = string } entries, oldest first.
+//The table is empty and the bool false when the AI player is the on-screen player's opponent.
 int CvLuaGame::lGetClaudeLog(lua_State* L)
 {
 	std::vector<ClaudeLogEntry> entries;
 	int seq = ClaudeBridge::Get().GetLog(entries);
+	bool bVisible = ClaudeBridge::Get().LogVisibleOnScreen();
+	if(!bVisible) entries.clear();
 	lua_pushinteger(L, seq);
 	lua_createtable(L, (int)entries.size(), 0);
 	for(size_t i = 0; i < entries.size(); ++i)
@@ -729,7 +732,8 @@ int CvLuaGame::lGetClaudeLog(lua_State* L)
 		lua_setfield(L, -2, "Text");
 		lua_rawseti(L, -2, (int)i + 1);
 	}
-	return 2;
+	lua_pushboolean(L, bVisible);
+	return 3;
 }
 //------------------------------------------------------------------------------
 //string, string, string, string GetClaudeIdentity(); provider, model, version and the joined label, "" until the model has named itself.

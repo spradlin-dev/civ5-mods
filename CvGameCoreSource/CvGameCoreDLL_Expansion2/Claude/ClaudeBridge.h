@@ -59,6 +59,8 @@ public:
 	// Any thread. The returned sequence number grows with every line ever appended,
 	// so callers can detect new lines even after old ones were trimmed.
 	int GetLog(std::vector<ClaudeLogEntry>& out);
+	// Any thread. ClaudeLogVisibleOnScreen as of the last Tick.
+	bool LogVisibleOnScreen() const;
 
 	// Records a game popup; it is described and logged on the next Tick. bOnScreen
 	// means the game's dialog is open: it is Claude's only when Claude's seat is the

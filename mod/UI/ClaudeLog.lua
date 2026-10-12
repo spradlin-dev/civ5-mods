@@ -28,6 +28,7 @@ local g_Filters = InstanceManager:new("FilterInstance", "Root", Controls.FilterS
 local g_Settings = Modding.OpenUserData("ClaudePlayerLog", 1);
 local g_Shown = {};
 local g_LastSeq = -1;
+local g_LastVisible = nil;
 local g_SinceRefresh = 0;
 local g_SinceIdentity = 0;
 local g_IdentityLabel = nil;
@@ -47,17 +48,27 @@ end
 
 -- bToBottom: jump to the newest line; otherwise only follow it if the reader is already there.
 local function Refresh(bToBottom)
-	local seq, entries = Game.GetClaudeLog();
-	if seq == g_LastSeq then
+	local seq, entries, bVisible = Game.GetClaudeLog();
+	if seq == g_LastSeq and bVisible == g_LastVisible then
 		return;
 	end
 	g_LastSeq = seq;
+	g_LastVisible = bVisible;
 	local bFollow = bToBottom or Controls.ScrollPanel:GetRatio() >= 1 or Controls.ScrollPanel:GetScrollValue() > 0.99;
 
 	local lines = {};
+	if not bVisible then
+		table.insert(lines, "This AI player is your opponent, so its log is hidden.");
+		table.insert(lines, "Its full thinking is in the window it runs in, and in ClaudeThinking.log in the game's Logs folder.");
+	end
 	for _, entry in ipairs(entries or {}) do
 		if entry.Category == "always" or g_Shown[entry.Category] ~= false then
-			for line in string.gmatch(entry.Text .. "\n", "(.-)\n") do
+			local text = entry.Text;
+			repeat
+				local before = text;
+				text = text:gsub("%[NEWLINE%]%s*%[NEWLINE%]", "[NEWLINE]"):gsub("%s*%[NEWLINE%]%s*$", "");
+			until text == before;
+			for line in string.gmatch(text .. "\n", "(.-)\n") do
 				table.insert(lines, line);
 			end
 		end
@@ -81,6 +92,7 @@ local function Refresh(bToBottom)
 	end
 
 	Controls.LineStack:CalculateSize();
+	Controls.LineStack:SetSizeY(Controls.LineStack:GetSizeY() + 8); -- room for the last line's descenders
 	Controls.LineStack:ReprocessAnchoring();
 	Controls.ScrollPanel:CalculateInternalSize();
 	if bFollow then
