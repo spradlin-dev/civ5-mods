@@ -9,9 +9,11 @@ struct ClaudeToolDef;
 #define CLAUDE_LOG_ALWAYS "always"
 #define CLAUDE_LOG_REASONING "reasoning"
 #define CLAUDE_LOG_TURN "turn"
-#define CLAUDE_LOG_MOVEMENT "movement"
-#define CLAUDE_LOG_MILITARY "military"
-#define CLAUDE_LOG_CIVILIAN "civilian"
+#define CLAUDE_LOG_MOVEMENT "movement" // military units moving
+#define CLAUDE_LOG_MILITARY "military" // military units' other orders
+#define CLAUDE_LOG_WORKERS "workers"
+#define CLAUDE_LOG_SETTLERS "settlers"
+#define CLAUDE_LOG_CIVILIAN "civilian" // great people, caravans, missionaries and other civilians
 #define CLAUDE_LOG_COMBAT "combat"
 #define CLAUDE_LOG_CITY "city"
 #define CLAUDE_LOG_EMPIRE "empire"

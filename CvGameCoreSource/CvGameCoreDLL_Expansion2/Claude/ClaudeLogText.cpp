@@ -148,11 +148,14 @@ const char* ClaudeLogCategory(const ClaudeToolDef& tool, const JObj& args)
 {
 	switch(tool.logAs)
 	{
-	case LOG_MOVE: return CLAUDE_LOG_MOVEMENT;
+	case LOG_MOVE:
 	case LOG_UNIT:
 	{
 		CvUnit* u = ArgUnit(args);
-		return (u && u->IsCombatUnit()) ? CLAUDE_LOG_MILITARY : CLAUDE_LOG_CIVILIAN;
+		if(!u) return CLAUDE_LOG_ALWAYS;
+		if(u->isFound()) return CLAUDE_LOG_SETTLERS;
+		if(u->IsCombatUnit()) return (tool.logAs == LOG_MOVE) ? CLAUDE_LOG_MOVEMENT : CLAUDE_LOG_MILITARY;
+		return (u->workRate(true) > 0) ? CLAUDE_LOG_WORKERS : CLAUDE_LOG_CIVILIAN;
 	}
 	case LOG_COMBAT: return CLAUDE_LOG_COMBAT;
 	case LOG_CITY: return CLAUDE_LOG_CITY;

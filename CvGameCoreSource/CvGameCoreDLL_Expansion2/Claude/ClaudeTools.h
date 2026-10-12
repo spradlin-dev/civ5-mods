@@ -13,8 +13,8 @@
 enum ClaudeLogKind
 {
 	LOG_NONE,
-	LOG_MOVE,
-	LOG_UNIT, // military or civilian, by the unit_id argument
+	LOG_MOVE, // LOG_MOVE and LOG_UNIT are split by the kind of unit in the unit_id argument
+	LOG_UNIT,
 	LOG_COMBAT,
 	LOG_CITY,
 	LOG_EMPIRE,
