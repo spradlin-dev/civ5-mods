@@ -286,6 +286,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\Claude\ClaudeRankings.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\Claude\ClaudeLogText.cpp"
 				>
 			</File>
