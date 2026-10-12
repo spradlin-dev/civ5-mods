@@ -121,6 +121,8 @@ struct ClaudeBridge::Impl
 	volatile bool shuttingDown;
 	volatile bool myTurn;
 	volatile bool screenHumanTurn; // the human on screen (not Claude's seat) may act
+	volatile int diploSeq;         // grows when a new request reaches the seat
+	int diploCount;
 	volatile bool logVisible;
 	volatile DWORD lastTickMs;
 
@@ -276,7 +278,7 @@ std::vector<ClaudePopup> ClaudeBridge::GetPopupsSince(int iTurn)
 
 ClaudeBridge::Impl::Impl()
 	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), logSeq(0), gameBriefingDue(true), logVisible(true), identityVersion(0), labelledIdentityVersion(-1), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0), gameTurn(-1), testingMode(false),
-	  shuttingDown(false), myTurn(false), screenHumanTurn(false), lastTickMs(0)
+	  shuttingDown(false), myTurn(false), screenHumanTurn(false), diploSeq(0), diploCount(0), lastTickMs(0)
 {
 	ClaudeInstallCrashHandler();
 	InitializeCriticalSection(&lock);
@@ -344,6 +346,9 @@ void ClaudeBridge::Impl::UpdateTurnFlags()
 	myTurn = (eSeat != NO_PLAYER) && ClaudeIsPlayerTurn(GET_PLAYER(eSeat));
 	PlayerTypes eActive = GC.getGame().getActivePlayer();
 	screenHumanTurn = (eActive != NO_PLAYER) && eActive != eSeat && ClaudeIsPlayerTurn(GET_PLAYER(eActive));
+	int iRequests = ClaudeCountDiploRequests();
+	if(iRequests > diploCount) ++diploSeq;
+	diploCount = iRequests;
 }
 
 void ClaudeBridge::Impl::Tick()
@@ -464,6 +469,7 @@ void ClaudeBridge::Impl::ResetForNewGame()
 	labelledIdentityVersion = -1; // a loaded save carries the label of whichever model played it
 	ClaudeGameId();
 	ClaudeResetDiploRequests();
+	diploCount = 0;
 }
 
 namespace
@@ -652,6 +658,10 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bo
 		    "Until a seat is claimed every tool acts on the human's own civilization. A claimed seat is off screen; "
 		    "your turn comes after the human's each round, so wait_for_my_turn may take as long as they do. "
 		    "Other leaders talk to you through diplomacy requests (briefing.diplomacy_requests): answer them with respond_to_request. "
+		    "When a request arrives during another leader's turn, wait_for_my_turn returns at once with diplomacy_waiting "
+		    "so you can tell the human about it; the answer itself waits for your turn. "
+		    "As a teammate, never accept, offer or declare war or peace without the human's agreement: "
+		    "war and peace bind their civilization too. "
 		    "Use propose_deal, demand, discuss and make_peace for your own diplomacy.");
 		return JsonRpcResponse(id, picojson::value(result));
 	}
@@ -744,7 +754,8 @@ picojson::value ClaudeBridge::Impl::CallTool(const std::string& name, const pico
 		if(timeout > CLAUDE_WAIT_MAX_SECONDS) timeout = CLAUDE_WAIT_MAX_SECONDS;
 
 		DWORD start = GetTickCount();
-		while(!shuttingDown && !(GameRunning() && myTurn) && GetTickCount() - start < (DWORD)(timeout * 1000.0))
+		int iSeqAtStart = diploSeq;
+		while(!shuttingDown && !(GameRunning() && (myTurn || diploSeq != iSeqAtStart)) && GetTickCount() - start < (DWORD)(timeout * 1000.0))
 			Sleep(250);
 	}
 

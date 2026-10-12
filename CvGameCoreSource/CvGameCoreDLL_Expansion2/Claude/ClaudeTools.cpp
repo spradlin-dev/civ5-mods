@@ -5,6 +5,7 @@
 #include "ClaudeLogText.h"
 #include "ClaudeToolHandlers.h"
 #include "ClaudeBridge.h"
+#include "ClaudeDiplomacy.h"
 #include "../CvGame.h"
 #include "../CvPlayer.h"
 #include "../CvTeam.h"
@@ -137,6 +138,8 @@ CLAUDE_TOOL(ToolStatus)
 	CvLeaderHeadInfo* pLeader = GC.getLeaderHeadInfo(me->getLeaderType());
 	o["leader"] = J(pLeader ? pLeader->GetDescription() : "");
 	o["is_my_turn"] = J(ClaudeIsPlayerTurn(*me));
+	std::string waiting = ClaudeDiploWaitingNote();
+	if(!waiting.empty()) o["diplomacy_waiting"] = J(waiting);
 	o["ai_processing"] = J(AiProcessing());
 	o["end_turn_blocking"] = J(BlockingName(EndTurnBlocking(me)));
 	o["units_needing_orders"] = J(me->GetCountReadyUnits());
@@ -904,7 +907,7 @@ namespace
 		  "Current turn, who you are, whether it is your turn, and what blocks ending it. Cheap; call it freely.",
 		  SCHEMA_EMPTY, ToolStatus, LOG_NONE, false },
 		{ "wait_for_my_turn",
-		  "Blocks until it is your turn (about half a minute at most; pass timeout_seconds to shorten), then returns status. Call it again if is_my_turn is still false.",
+		  "Blocks until it is your turn or a new request from another leader arrives (about half a minute at most; pass timeout_seconds to shorten), then returns status. Call it again if is_my_turn is still false.",
 		  "{\"type\":\"object\",\"properties\":{\"timeout_seconds\":{\"type\":\"number\"}}}", ToolStatus, LOG_NONE, true },
 		{ "briefing",
 		  "Start every turn with this: what happened since your last turn, game messages you must acknowledge, decisions waiting for you, nearby enemies, economy warnings, and a diplomacy snapshot. Optional since_turn widens the event window.",

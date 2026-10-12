@@ -521,6 +521,14 @@ int ClaudeCountDiploRequests()
 	return (int)s_requests.size() + ProposedDealsWithSeat(NULL);
 }
 
+std::string ClaudeDiploWaitingNote()
+{
+	std::string note;
+	if(!s_requests.empty()) note = ClaudeFormat("%d request(s) from other leaders await your answer on your turn (diplomacy, then respond_to_request)", (int)s_requests.size());
+	if(ProposedDealsWithSeat(NULL) > 0) note += std::string(note.empty() ? "" : "; ") + "a human's deal offer awaits your answer (diplomacy, then answer_deal)";
+	return note;
+}
+
 CLAUDE_TOOL(ToolAnswerDeal)
 {
 	CvPlayer* me = MeActing(err);

@@ -20,3 +20,5 @@ void ClaudeNoteDealResolved(PlayerTypes eFrom, PlayerTypes eTo, PlayerTypes eAct
 picojson::value ClaudeDiploRequestsJson();
 int ClaudeCountDiploRequests();
 void ClaudeResetDiploRequests();
+// For status: what awaits the seat's answer; empty when nothing does.
+std::string ClaudeDiploWaitingNote();
