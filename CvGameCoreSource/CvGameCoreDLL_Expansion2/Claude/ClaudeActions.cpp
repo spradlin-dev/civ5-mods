@@ -225,6 +225,8 @@ CLAUDE_TOOL(ToolAttack)
 		return JVal(o);
 	}
 
+	// The game queues an attack from a unit with no moves and never runs it.
+	if(!RequireMoves(u, err)) return JVal();
 	PlayerTypes eDefOwner = target.unit ? target.unit->getOwner() : NO_PLAYER;
 	int iDefId = target.unit ? target.unit->GetID() : -1;
 	int hpBefore = u->GetCurrHitPoints();
