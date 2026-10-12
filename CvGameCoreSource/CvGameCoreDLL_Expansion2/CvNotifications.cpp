@@ -13,6 +13,7 @@
 #include "ICvDLLUserInterface.h"
 #include "CvEnumSerialization.h"
 #include "CvDllPlot.h"
+#include "Claude/ClaudeSeat.h"
 
 // Include this after all other headers.
 #include "LintFree.h"
@@ -435,6 +436,7 @@ int CvNotifications::Add(NotificationTypes eNotificationType, const char* strMes
 	}
 
 	m_aNotifications[m_iNotificationsEndIndex] = newNotification;
+	ClaudeNoteSeatNotification(m_ePlayer, strMessage, strSummary);
 
 	if(GC.getGame().isFinalInitialized())
 	{

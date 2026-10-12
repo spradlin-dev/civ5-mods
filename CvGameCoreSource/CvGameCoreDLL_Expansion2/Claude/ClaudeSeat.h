@@ -20,4 +20,6 @@ bool ClaudeReleaseSeat(std::string& err);
 // it is for Claude's off-screen seat (or that seat's team). Same arguments as the
 // game's popup info.
 void ClaudeNoteSeatPopup(PlayerTypes ePlayer, int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text);
+// Game thread. Echoes a notification for Claude's seat into the Claude Log.
+void ClaudeNoteSeatNotification(PlayerTypes ePlayer, const char* szMessage, const char* szSummary);
 void ClaudeNoteSeatTeamPopup(TeamTypes eTeam, int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text);

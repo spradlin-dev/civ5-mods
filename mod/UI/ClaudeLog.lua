@@ -5,21 +5,44 @@ include("InstanceManager");
 
 local MAX_LINES_SHOWN = 400;
 
+-- The DLL tags every log entry with one of these categories (Claude/ClaudeLogText.h);
+-- entries tagged "always" are shown whatever is filtered.
+local CATEGORIES = {
+	{ key = "reasoning", label = "Claude's notes" },
+	{ key = "turn", label = "Turns" },
+	{ key = "movement", label = "Movement" },
+	{ key = "military", label = "Military units" },
+	{ key = "civilian", label = "Workers, civilians" },
+	{ key = "combat", label = "Combat" },
+	{ key = "city", label = "Cities" },
+	{ key = "empire", label = "Research, policies" },
+	{ key = "diplomacy", label = "Diplomacy" },
+	{ key = "messages", label = "Game messages" },
+	{ key = "notifications", label = "Notifications" },
+};
+
 local g_Lines = InstanceManager:new("LineInstance", "Text", Controls.LineStack);
+local g_Filters = InstanceManager:new("FilterInstance", "Root", Controls.FilterStack);
+local g_Settings = Modding.OpenUserData("ClaudePlayerLog", 1);
+local g_Shown = {};
 local g_LastSeq = -1;
 local g_SinceRefresh = 0;
 
-local function Refresh()
-	local seq, text = Game.GetClaudeLog();
+-- bToBottom: jump to the newest line; otherwise only follow it if the reader is already there.
+local function Refresh(bToBottom)
+	local seq, entries = Game.GetClaudeLog();
 	if seq == g_LastSeq then
 		return;
 	end
 	g_LastSeq = seq;
+	local bFollow = bToBottom or Controls.ScrollPanel:GetRatio() >= 1 or Controls.ScrollPanel:GetScrollValue() > 0.99;
 
 	local lines = {};
-	if text ~= nil and text ~= "" then
-		for line in string.gmatch(text .. "\n", "(.-)\n") do
-			table.insert(lines, line);
+	for _, entry in ipairs(entries or {}) do
+		if entry.Category == "always" or g_Shown[entry.Category] ~= false then
+			for line in string.gmatch(entry.Text .. "\n", "(.-)\n") do
+				table.insert(lines, line);
+			end
 		end
 	end
 
@@ -43,12 +66,30 @@ local function Refresh()
 	Controls.LineStack:CalculateSize();
 	Controls.LineStack:ReprocessAnchoring();
 	Controls.ScrollPanel:CalculateInternalSize();
-	Controls.ScrollPanel:SetScrollValue(1);
+	if bFollow then
+		Controls.ScrollPanel:SetScrollValue(1);
+	end
 end
+
+for _, category in ipairs(CATEGORIES) do
+	local key = category.key;
+	g_Shown[key] = tostring(g_Settings.GetValue("Show_" .. key)) ~= "0";
+	local filter = g_Filters:GetInstance();
+	filter.Box:SetText(category.label);
+	filter.Box:SetCheck(g_Shown[key]);
+	filter.Box:RegisterCheckHandler(function(bChecked)
+		g_Shown[key] = bChecked;
+		g_Settings.SetValue("Show_" .. key, bChecked and "1" or "0");
+		g_LastSeq = -1;
+		Refresh(true);
+	end);
+end
+Controls.FilterStack:CalculateSize();
+Controls.FilterStack:ReprocessAnchoring();
 
 local function Open()
 	g_LastSeq = -1;
-	Refresh();
+	Refresh(true);
 	Controls.Popup:SetHide(false);
 end
 

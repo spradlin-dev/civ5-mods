@@ -15,6 +15,13 @@ struct ClaudePopup
 	bool read;
 };
 
+// One line of the in-game Claude Log; category is one of the CLAUDE_LOG_ names.
+struct ClaudeLogEntry
+{
+	std::string category;
+	std::string text;
+};
+
 // Serves MCP (JSON-RPC over HTTP) to Claude. Requests arrive on the HTTP thread;
 // anything that reads or changes game state is queued and run by Tick() on the
 // game thread, so game code never runs off its own thread.
@@ -34,12 +41,11 @@ public:
 	static void RetryLater();
 
 	// Game thread. Appends to the in-game log, inserting a separator when the turn changed.
-	void LogLine(const std::string& text);
+	void LogLine(const char* category, const std::string& text);
 
-	// Any thread. out receives the entries joined with '\n'; the returned sequence
-	// number grows with every line ever appended, so callers can detect new lines
-	// even after old ones were trimmed.
-	int GetLogText(std::string& out);
+	// Any thread. The returned sequence number grows with every line ever appended,
+	// so callers can detect new lines even after old ones were trimmed.
+	int GetLog(std::vector<ClaudeLogEntry>& out);
 
 	// Records a game popup; it is described and logged on the next Tick. bOnScreen
 	// means the game's dialog is open: it is Claude's only when Claude's seat is the

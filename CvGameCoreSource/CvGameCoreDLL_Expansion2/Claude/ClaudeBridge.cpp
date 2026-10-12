@@ -9,6 +9,7 @@
 #include "ClaudePopups.h"
 #include "ClaudeSeat.h"
 #include "ClaudeDiplomacy.h"
+#include "ClaudeLogText.h"
 #include "../CvGame.h"
 #include "../CvPlayer.h"
 #include "../CvGlobals.h"
@@ -19,7 +20,7 @@
 #define CLAUDE_GAME_IDLE_MS 3000
 #define CLAUDE_WAIT_DEFAULT_SECONDS 25.0
 #define CLAUDE_WAIT_MAX_SECONDS 55.0
-#define CLAUDE_MAX_LOG_ENTRIES 5000
+#define CLAUDE_MAX_LOG_ENTRIES 2000
 #define CLAUDE_MAX_POPUPS 200
 
 struct ClaudePendingPopup
@@ -99,7 +100,7 @@ struct ClaudeBridge::Impl
 	bool startFailureShown;
 	CRITICAL_SECTION lock; // guards jobs, log and every job state transition
 	std::deque<ClaudeJob*> jobs;
-	std::vector<std::string> log;
+	std::deque<ClaudeLogEntry> log;
 	int logSeq;
 	int lastLogTurn;
 	std::vector<ClaudePendingPopup> pendingPopups; // written by the UI thread, drained by Tick
@@ -126,12 +127,12 @@ struct ClaudeBridge::Impl
 	void Shutdown();
 	void UpdateTurnFlags();
 	bool RunJob(ClaudeJob* pJob); // true: run it again on a later frame
-	void LogLine(const std::string& text);
+	void LogLine(const char* category, const std::string& text);
 	void DrainPopups();
 	void ResetForNewGame();
 
 	// any thread
-	int GetLogText(std::string& out);
+	int GetLog(std::vector<ClaudeLogEntry>& out);
 	bool GameRunning() const { return lastTickMs != 0 && GetTickCount() - lastTickMs < CLAUDE_GAME_IDLE_MS; }
 
 	// HTTP thread
@@ -153,8 +154,8 @@ ClaudeBridge::ClaudeBridge() : m_pImpl(new Impl()) {}
 ClaudeBridge::~ClaudeBridge() { delete m_pImpl; }
 void ClaudeBridge::Tick() { m_pImpl->Tick(); }
 void ClaudeBridge::Shutdown() { m_pImpl->Shutdown(); }
-void ClaudeBridge::LogLine(const std::string& text) { m_pImpl->LogLine(text); }
-int ClaudeBridge::GetLogText(std::string& out) { return m_pImpl->GetLogText(out); }
+void ClaudeBridge::LogLine(const char* category, const std::string& text) { m_pImpl->LogLine(category, text); }
+int ClaudeBridge::GetLog(std::vector<ClaudeLogEntry>& out) { return m_pImpl->GetLog(out); }
 
 void ClaudeBridge::NotePopup(int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text, bool bOnScreen)
 {
@@ -275,7 +276,7 @@ void ClaudeBridge::Impl::TryStart()
 	if(!startFailureShown)
 	{
 		startFailureShown = true;
-		LogLine(msg + " (retrying)");
+		LogLine(CLAUDE_LOG_ALWAYS, msg + " (retrying)");
 	}
 	delete pServer;
 	pServer = NULL;
@@ -340,7 +341,7 @@ void ClaudeBridge::Impl::DrainPopups()
 	int iLost = pendingDropped;
 	pendingDropped = 0;
 	LeaveCriticalSection(&lock);
-	if(iLost > 0) LogLine(ClaudeFormat("[bridge] %d game message(s) were lost: more than %d arrived before the game thread read them", iLost, CLAUDE_MAX_POPUPS));
+	if(iLost > 0) LogLine(CLAUDE_LOG_MESSAGES, ClaudeFormat("[bridge] %d game message(s) were lost: more than %d arrived before the game thread read them", iLost, CLAUDE_MAX_POPUPS));
 	bool bScreenIsMine = ClaudeSeatOnScreen();
 	for(size_t i = 0; i < pending.size(); ++i)
 	{
@@ -353,7 +354,7 @@ void ClaudeBridge::Impl::DrainPopups()
 				EnterCriticalSection(&lock);
 				dialogsToClose += std::string(dialog) + "\n";
 				LeaveCriticalSection(&lock);
-				LogLine(std::string("[testing] closed the human's ") + dialog + " unread");
+				LogLine(CLAUDE_LOG_TURN, std::string("Testing: closed the human's ") + dialog + " unread");
 			}
 			continue;
 		}
@@ -383,8 +384,8 @@ void ClaudeBridge::Impl::DrainPopups()
 			popups.erase(popups.begin(), popups.begin() + excess);
 		}
 		LeaveCriticalSection(&lock);
-		if(iDroppedUnread > 0) LogLine(ClaudeFormat("[bridge] %d unread game message(s) dropped: more than %d were kept", iDroppedUnread, CLAUDE_MAX_POPUPS));
-		LogLine(ClaudeFormat("[game #%d] ", popup.id) + popup.text);
+		if(iDroppedUnread > 0) LogLine(CLAUDE_LOG_MESSAGES, ClaudeFormat("[bridge] %d unread game message(s) dropped: more than %d were kept", iDroppedUnread, CLAUDE_MAX_POPUPS));
+		LogLine(CLAUDE_LOG_MESSAGES, ClaudeFormat("Game message #%d: ", popup.id) + popup.text);
 	}
 }
 
@@ -424,7 +425,9 @@ bool ClaudeBridge::Impl::RunJob(ClaudeJob* pJob)
 		return false;
 	}
 	bool bFirstTry = !pJob->retrying;
-	if(pTool->isAction && bFirstTry) LogLine("> " + pJob->tool + " " + picojson::value(pJob->args).serialize());
+	bool bLogged = pTool->logAs != LOG_NONE;
+	const char* szCategory = bLogged ? ClaudeLogCategory(*pTool, pJob->args) : "";
+	if(bLogged && bFirstTry) LogLine(szCategory, ClaudeDescribeCall(*pTool, pJob->args));
 	ClaudeCrashSetContext((pJob->tool + " " + picojson::value(pJob->args).serialize()).c_str());
 	s_retryRequested = false;
 	pJob->error.clear();
@@ -440,39 +443,37 @@ bool ClaudeBridge::Impl::RunJob(ClaudeJob* pJob)
 		}
 		if(now - pJob->firstTryMs < CLAUDE_RETRY_WINDOW_MS) return true;
 	}
-	if(pTool->isAction && !pJob->error.empty()) LogLine("  => ERROR: " + pJob->error);
+	if(!bLogged) return false;
+	std::string outcome = pJob->error.empty() ? ClaudeDescribeResult(*pTool, pJob->result) : "Refused: " + pJob->error;
+	if(!outcome.empty()) LogLine(szCategory, "    " + outcome);
 	return false;
 }
 
-void ClaudeBridge::Impl::LogLine(const std::string& text)
+void ClaudeBridge::Impl::LogLine(const char* category, const std::string& text)
 {
 	int iTurn = GC.getGame().getGameTurn();
 	EnterCriticalSection(&lock);
 	if(iTurn != lastLogTurn)
 	{
-		log.push_back(ClaudeFormat("---------- Turn %d ----------", iTurn));
+		ClaudeLogEntry separator = { CLAUDE_LOG_ALWAYS, ClaudeFormat("---------- Turn %d ----------", iTurn) };
+		log.push_back(separator);
 		++logSeq;
 		lastLogTurn = iTurn;
 	}
-	log.push_back(text);
+	ClaudeLogEntry entry = { category, text };
+	log.push_back(entry);
 	++logSeq;
-	if(log.size() > CLAUDE_MAX_LOG_ENTRIES)
-		log.erase(log.begin(), log.begin() + (log.size() - CLAUDE_MAX_LOG_ENTRIES));
+	while(log.size() > CLAUDE_MAX_LOG_ENTRIES) log.pop_front();
 	LeaveCriticalSection(&lock);
 
 	FILogFile* pLog = LOGFILEMGR.GetLog("ClaudeThinking.log", FILogFile::kDontTimeStamp);
-	if(pLog) pLog->Msg("%s", text.c_str());
+	if(pLog) pLog->Msg("[%s] %s", category, text.c_str());
 }
 
-int ClaudeBridge::Impl::GetLogText(std::string& out)
+int ClaudeBridge::Impl::GetLog(std::vector<ClaudeLogEntry>& out)
 {
-	out.clear();
 	EnterCriticalSection(&lock);
-	for(size_t i = 0; i < log.size(); ++i)
-	{
-		if(i) out += '\n';
-		out += log[i];
-	}
+	out.assign(log.begin(), log.end());
 	int seq = logSeq;
 	LeaveCriticalSection(&lock);
 	return seq;

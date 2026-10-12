@@ -1,6 +1,7 @@
 #include "CvGameCoreDLLPCH.h"
 #include "ClaudeSeat.h"
 #include "ClaudeBridge.h"
+#include "ClaudeLogText.h"
 #include "../CvGame.h"
 #include "../CvPlayer.h"
 #include "../CvGlobals.h"
@@ -64,7 +65,7 @@ bool ClaudeClaimSeat(PlayerTypes ePlayer, std::string& err)
 	CvPreGame::setNickname(ePlayer, CvString(SEAT_NAME));
 	PlayerTypes eActive = game.getActivePlayer();
 	if(eActive != NO_PLAYER) CvPreGame::setHandicap(ePlayer, CvPreGame::handicap(eActive));
-	ClaudeBridge::Get().LogLine(std::string("[seat] Claude now plays ") + p.getCivilizationShortDescription() + " at the human's difficulty");
+	ClaudeBridge::Get().LogLine(CLAUDE_LOG_TURN, std::string("Claude now plays ") + p.getCivilizationShortDescription() + " at the human's difficulty");
 	return true;
 }
 
@@ -76,7 +77,7 @@ bool ClaudeReleaseSeat(std::string& err)
 	CvPreGame::setSlotStatus(e, SS_COMPUTER);
 	CvPreGame::setNickname(e, CvString(""));
 	CvPreGame::setHandicap(e, (HandicapTypes)GC.getAI_HANDICAP());
-	ClaudeBridge::Get().LogLine(std::string("[seat] the game's AI now plays ") + GET_PLAYER(e).getCivilizationShortDescription());
+	ClaudeBridge::Get().LogLine(CLAUDE_LOG_TURN, std::string("The game's AI now plays ") + GET_PLAYER(e).getCivilizationShortDescription());
 	return true;
 }
 
@@ -85,6 +86,13 @@ void ClaudeNoteSeatPopup(PlayerTypes ePlayer, int iType, int iData1, int iData2,
 	PlayerTypes eSeat = NamedSeat();
 	if(eSeat == NO_PLAYER || ePlayer != eSeat || eSeat == GC.getGame().getActivePlayer()) return;
 	ClaudeBridge::Get().NotePopup(iType, iData1, iData2, iData3, bOption1, text, false);
+}
+
+void ClaudeNoteSeatNotification(PlayerTypes ePlayer, const char* szMessage, const char* szSummary)
+{
+	if(ePlayer == NO_PLAYER || ePlayer != ClaudeSeat()) return;
+	const char* szText = (szMessage && *szMessage) ? szMessage : szSummary;
+	if(szText && *szText) ClaudeBridge::Get().LogLine(CLAUDE_LOG_NOTIFICATIONS, std::string("Notification: ") + szText);
 }
 
 void ClaudeNoteSeatTeamPopup(TeamTypes eTeam, int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text)

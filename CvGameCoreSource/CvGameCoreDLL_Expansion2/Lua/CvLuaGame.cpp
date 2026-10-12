@@ -711,13 +711,22 @@ int CvLuaGame::lGetGameTurn(lua_State* L)
 	return BasicLuaMethod(L, &CvGame::getGameTurn);
 }
 //------------------------------------------------------------------------------
-//int, string GetClaudeLog();
+//int, table GetClaudeLog(); the table lists { Category = string, Text = string } entries, oldest first.
 int CvLuaGame::lGetClaudeLog(lua_State* L)
 {
-	std::string text;
-	int seq = ClaudeBridge::Get().GetLogText(text);
+	std::vector<ClaudeLogEntry> entries;
+	int seq = ClaudeBridge::Get().GetLog(entries);
 	lua_pushinteger(L, seq);
-	lua_pushlstring(L, text.data(), text.size());
+	lua_createtable(L, (int)entries.size(), 0);
+	for(size_t i = 0; i < entries.size(); ++i)
+	{
+		lua_createtable(L, 0, 2);
+		lua_pushlstring(L, entries[i].category.data(), entries[i].category.size());
+		lua_setfield(L, -2, "Category");
+		lua_pushlstring(L, entries[i].text.data(), entries[i].text.size());
+		lua_setfield(L, -2, "Text");
+		lua_rawseti(L, -2, (int)i + 1);
+	}
 	return 2;
 }
 //------------------------------------------------------------------------------

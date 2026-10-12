@@ -1,5 +1,6 @@
 #include "CvGameCoreDLLPCH.h"
 #include "ClaudeDiplomacy.h"
+#include "ClaudeLogText.h"
 #include "ClaudeSeat.h"
 #include "ClaudeBridge.h"
 #include "ClaudeToolSupport.h"
@@ -244,7 +245,7 @@ namespace
 		r.hasDeal = (pDeal != NULL);
 		if(pDeal) r.deal = *pDeal;
 		s_requests.push_back(r);
-		ClaudeBridge::Get().LogLine(ClaudeFormat("[diplomacy #%d] %s (%s): ", r.id, CivName(eFrom).c_str(), StateName(eState)) + r.message);
+		ClaudeBridge::Get().LogLine(CLAUDE_LOG_DIPLOMACY, ClaudeFormat("Diplomacy #%d from %s (%s): ", r.id, CivName(eFrom).c_str(), StateName(eState)) + r.message);
 	}
 
 	// ------------------------------------------------------------- deal building
@@ -644,7 +645,7 @@ CLAUDE_TOOL(ToolRespondToRequest)
 		}
 		else if(choice != "acknowledge") { err = "this request only takes acknowledge"; return JVal(); }
 		else if(!AcknowledgeEvent(r->state, ev))
-			ClaudeBridge::Get().LogLine(ClaudeFormat("[diplomacy #%d] no reply event for state %d; nothing sent to the game", r->id, (int)r->state));
+			ClaudeBridge::Get().LogLine(CLAUDE_LOG_DIPLOMACY, ClaudeFormat("Diplomacy #%d: no reply event for state %d; nothing sent to the game", r->id, (int)r->state));
 		if(ev != NO_FROM_UI_DIPLO_EVENT) theirAI->DoFromUIDiploEvent(me->GetID(), ev, a1, a2);
 	}
 	o["ok"] = J(true);
