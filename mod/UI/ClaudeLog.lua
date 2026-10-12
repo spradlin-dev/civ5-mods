@@ -75,7 +75,7 @@ for _, category in ipairs(CATEGORIES) do
 	local key = category.key;
 	g_Shown[key] = tostring(g_Settings.GetValue("Show_" .. key)) ~= "0";
 	local filter = g_Filters:GetInstance();
-	filter.Box:SetText(category.label);
+	filter.Box:GetTextButton():SetText(category.label);
 	filter.Box:SetCheck(g_Shown[key]);
 	filter.Box:RegisterCheckHandler(function(bChecked)
 		g_Shown[key] = bChecked;
