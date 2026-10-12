@@ -20,6 +20,7 @@
 #include "../CvBuildingClasses.h"
 #include "../CvTreasury.h"
 #include "../CvInfos.h"
+#include "../CvPreGame.h"
 
 using namespace ClaudeTool;
 
@@ -38,6 +39,64 @@ namespace
 		}
 		return out;
 	}
+}
+
+CLAUDE_TOOL(ToolGameSettings)
+{
+	CvPlayer* me = Me(err);
+	if(!me) return JVal();
+	JObj o;
+	CvEraInfo* pEra = GC.getEraInfo(CvPreGame::era());
+	if(pEra) o["start_era"] = J(pEra->GetDescription());
+	std::string script = CvPreGame::mapScriptName().c_str();
+	size_t slash = script.find_last_of("\\/");
+	if(slash != std::string::npos) script = script.substr(slash + 1);
+	size_t dot = script.find_last_of('.');
+	o["map_type"] = J(dot == std::string::npos ? script : script.substr(0, dot));
+	o["map_size"] = J(GC.getMap().getWorldInfo().GetDescription());
+	PlayerTypes eHuman = GC.getGame().getActivePlayer();
+	CvHandicapInfo* pHandicap = GC.getHandicapInfo(CvPreGame::handicap(eHuman == NO_PLAYER ? me->GetID() : eHuman));
+	if(pHandicap) o["difficulty"] = J(pHandicap->GetDescription());
+	CvGameSpeedInfo* pSpeed = GC.getGameSpeedInfo(CvPreGame::gameSpeed());
+	if(pSpeed) o["game_pace"] = J(pSpeed->GetDescription());
+	o["max_turns"] = J(GC.getGame().getMaxTurns());
+
+	JArr victories;
+	for(int i = 0; i < GC.getNumVictoryInfos(); ++i)
+	{
+		CvVictoryInfo* v = GC.getVictoryInfo((VictoryTypes)i);
+		if(v && CvPreGame::isVictory((VictoryTypes)i)) victories.push_back(J(v->GetDescription()));
+	}
+	o["victory_types"] = JVal(victories);
+
+	// Every option switched on, hidden ones included: setup mods such as Really Advanced Setup
+	// turn on options the in-game Details panel does not list (no happiness, no science...).
+	JArr options;
+	const std::vector<CvPreGame::CustomOption>& set = CvPreGame::GetGameOptions();
+	for(size_t i = 0; i < set.size(); ++i)
+	{
+		if(set[i].GetValue() == 0) continue;
+		std::string key = set[i].GetName();
+		JObj opt;
+		opt["option"] = J(key);
+		for(int k = 0; k < GC.getNumGameOptionInfos(); ++k)
+		{
+			CvGameOptionInfo* info = GC.getGameOptionInfo((GameOptionTypes)k);
+			if(!info || key != info->GetType()) continue;
+			opt["name"] = J(info->GetDescription());
+			if(info->GetHelp() && *info->GetHelp()) opt["effect"] = J(Localized(info->GetHelp()));
+			break;
+		}
+		if(set[i].GetValue() != 1) opt["value"] = J(set[i].GetValue());
+		options.push_back(JVal(opt));
+	}
+	o["options"] = JVal(options);
+
+	JObj mapOptions;
+	const std::vector<CvPreGame::CustomOption>& mapSet = CvPreGame::GetMapOptions();
+	for(size_t i = 0; i < mapSet.size(); ++i) mapOptions[mapSet[i].GetName()] = J(mapSet[i].GetValue());
+	o["map_script_options"] = JVal(mapOptions);
+	return JVal(o);
 }
 
 CLAUDE_TOOL(ToolMods)
@@ -865,6 +924,9 @@ namespace
 		{ "policy_options",
 		  "Social policy branches and policies: what is unlocked, adoptable now, and what each does; plus your culture and the next policy cost.",
 		  SCHEMA_EMPTY, ToolPolicyOptions, LOG_NONE, false },
+		{ "game_settings",
+		  "How this game was set up, fixed for its whole life: start era, map type and size, difficulty, pace, victory types, every game option switched on (including ones setup mods add, such as no happiness) and the map script's own options.",
+		  SCHEMA_EMPTY, ToolGameSettings, LOG_NONE, false },
 		{ "mods",
 		  "The mods loaded in this game, each with its version and the description its author wrote, so you know how the game differs from the standard rules. They can change between loads of the same game.",
 		  SCHEMA_EMPTY, ToolMods, LOG_NONE, false },

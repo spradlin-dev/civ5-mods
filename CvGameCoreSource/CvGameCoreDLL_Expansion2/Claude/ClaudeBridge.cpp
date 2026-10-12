@@ -621,6 +621,8 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bo
 		    "status.game_id names this game across reloads and reconnections: keep your memories about this game "
 		    "(your role, plans, what you learned about the other players) under that id, keep lessons for every game separate, "
 		    "and when you connect, look up your memories for this game_id before you play. "
+		    "On every connection call game_settings once (era, map, difficulty, victory types and the game options that change the rules, "
+		    "such as no happiness) and record it with your memories for this game_id. "
 		    "The mods loaded in this game can change between loads: on every connection call the mods tool once (names and what each does), "
 		    "compare it with what you remembered for this game_id and record the current list; status.mods repeats just the names. "
 		    "Right after naming yourself, call status and tell the human in your reply who you are and what you play: "

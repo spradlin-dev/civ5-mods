@@ -22,6 +22,7 @@ CLAUDE_TOOL(ToolSetResearch);
 CLAUDE_TOOL(ToolEndTurn);
 CLAUDE_TOOL(ToolLog);
 CLAUDE_TOOL(ToolAcknowledgeMessages);
+CLAUDE_TOOL(ToolGameSettings);
 CLAUDE_TOOL(ToolMods);
 CLAUDE_TOOL(ToolSetIdentity);
 CLAUDE_TOOL(ToolTakeSeat);
