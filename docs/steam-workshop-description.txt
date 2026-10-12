@@ -1,35 +1,37 @@
-[h1]Claude Player[/h1]
-Play Civilization V with Claude, Anthropic's AI, as a teammate or a rival. Claude takes over one of the AI civilizations and plays it itself: it researches, builds, fights, trades and talks to the other leaders. A "Claude Log" button shows what Claude is thinking each turn.
+[h1]Local MCP Server DLL[/h1]
+Play Civilization V with an AI model as your teammate or your rival, or let it play your own civilization while you watch. This mod replaces the game's core DLL with one that runs an MCP (Model Context Protocol) server on your PC. Any AI model connected through an MCP client on the same PC can then see the game and play it: research, build, fight, trade and talk to the other leaders. An "AI Log" button shows what it is doing each turn.
 
 [h2]What you need[/h2]
 [list]
 [*]Civilization V with Brave New World, on Windows
-[*]Claude Code, with a Claude Pro or Max subscription or an API key: https://claude.com/claude-code
+[*]An MCP client that runs on your PC and can connect to a local HTTP server. Claude Code is tested: https://claude.com/claude-code
 [/list]
+Chat apps that run their connectors in the cloud, such as the ChatGPT or Claude websites, cannot reach a server on your PC.
 
 [h2]Setup (one time)[/h2]
 [olist]
 [*]Subscribe to this mod.
-[*]Install Claude Code.
-[*]Open a terminal and run:
+[*]Add the server to your MCP client. For Claude Code, open a terminal and run:
 [code]claude mcp add --transport http --scope user civ5 http://127.0.0.1:7676/mcp[/code]
-[*]Make a folder for Claude's Civ games, for example Documents\Civ5 Claude. Always start Claude from that folder, so it remembers what it learns between games.
+Other clients: add an HTTP MCP server at http://127.0.0.1:7676/mcp.
+[*]Make a folder for your AI's Civ games, for example Documents\Civ5 AI, and always start your client from it, so it remembers what it learns between games.
 [/olist]
 
 [h2]Playing a game[/h2]
 [olist]
-[*]In Civilization V, open Mods, enable Claude Player, and start a single-player game. Use Advanced Setup if you want Claude on your team.
-[*]Once the map has loaded, open a terminal in your Claude folder and run: claude
-[*]Tell Claude which civilization to play, for example: "Play the Maya in my Civ 5 game" or have it pick one at random.
-[*]Play your turns as usual. Claude plays its turn after yours. Keep Claude running; it waits for its turn by itself.
+[*]In Civilization V, open Mods, enable Local MCP Server DLL, and start a single-player game. Use Advanced Setup to put AI civilizations on your team if you want a teammate.
+[*]Once the map has loaded, start your MCP client in your AI folder and ask it to play.
+[*]It names itself, then asks which role you want: your civilization, a teammate, or a secret opponent. A secret opponent's civilization is chosen at random and stays hidden until you meet it.
+[*]Play your turns as usual. The AI plays its turn after yours and waits for its turn by itself.
 [/olist]
 
 [h2]Good to know[/h2]
 [list]
-[*]Claude can only connect while a game is loaded.
-[*]The connection stays on your own PC. Nothing in the game is reachable from the internet.
-[*]Saves keep Claude's seat. After loading a save, start Claude again and it picks up where it left off.
-[*]While Claude takes its turn, you can't act or save until it ends its turn. Keyboard shortcuts you press while claude is taking its turn will take effect after claude ends its turn.
-[*]This mod replaces the game's core DLL, so it can't be combined with other mods that do the same, such as the Community Patch.
+[*]The AI can only connect while a game is loaded.
+[*]The server only listens on your own PC. Nothing in the game is reachable from the internet.
+[*]Saves keep the AI's civilization. After loading a save, start your client again and it picks up where it left off.
+[*]While the AI takes its turn, you can't act or save until it ends its turn.
+[*]The AI Log is hidden while the AI plays against you. Its full reasoning stays in your MCP client's window.
 [*]Single player only. Multiplayer and hotseat are not supported.
+[*]Not compatible with other mods that replace the game DLL, such as the Community Patch, Vox Populi, or Gaia's Core Mod.
 [/list]

@@ -1,6 +1,6 @@
 #pragma once
 
-// Crash reporting for the bridge: ClaudeCrash.log in the game's Logs folder, for exceptions this DLL is involved in.
+// Crash reporting for the bridge: AICrash.log in the game's Logs folder, for exceptions this DLL is involved in.
 void ClaudeInstallCrashHandler();
 // Must run before the DLL unloads: the handler is registered process-wide.
 void ClaudeUninstallCrashHandler();

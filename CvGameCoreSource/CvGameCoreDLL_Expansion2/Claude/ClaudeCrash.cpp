@@ -5,7 +5,7 @@
 #include <dbghelp.h>
 #include <stdarg.h>
 
-// Writes ClaudeCrash.log for exceptions raised in this DLL or with it on the call
+// Writes AICrash.log for exceptions raised in this DLL or with it on the call
 // stack: the exception, the tool that was running, and the stack as module+offset,
 // which the linker map resolves. The game's own code raises and handles many
 // exceptions that never involve this DLL; those are skipped.
@@ -89,7 +89,7 @@ namespace
 			}
 		}
 
-		FILogFile* pLog = bOurs ? LOGFILEMGR.GetLog("ClaudeCrash.log", FILogFile::kDontTimeStamp) : NULL;
+		FILogFile* pLog = bOurs ? LOGFILEMGR.GetLog("AICrash.log", FILogFile::kDontTimeStamp) : NULL;
 		if(pLog)
 		{
 			char where[160];

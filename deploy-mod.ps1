@@ -1,12 +1,12 @@
-# Updates the deployed "Claude Player" mod in the game's MODS folder with the built DLL and the files under mod/.
+# Updates the deployed "Local MCP Server DLL" mod in the game's MODS folder with the built DLL and the files under mod/.
 # The .modinfo is rewritten only when its text changes: the game re-registers a mod whose .modinfo changed and
 # forgets that it was enabled, which also makes saves made with it look like they need a missing mod.
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $dll = Join-Path $root 'CvGameCoreSource\BuildOutput\VS2008_ModWin32\CvGameCoreDLL_Expansion2Win32Mod.dll'
 $modSrc = Join-Path $root 'mod'
-$modDir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "My Games\Sid Meier's Civilization 5\MODS\ClaudePlayer (v 1)"
-$modinfoName = 'ClaudePlayer.modinfo'
+$modDir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "My Games\Sid Meier's Civilization 5\MODS\LocalMCPServerDLL (v 1)"
+$modinfoName = 'LocalMCPServerDLL.modinfo'
 
 if (-not (Test-Path $dll)) { throw "DLL not built: $dll" }
 New-Item -ItemType Directory -Force $modDir | Out-Null

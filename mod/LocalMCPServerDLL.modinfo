@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Mod id="48e7f398-9447-434a-8b11-9e7e38cde8c6" version="1">
   <Properties>
-    <Name>Claude Player</Name>
-    <Teaser>Lets Claude play a civilization through an MCP server.</Teaser>
-    <Description>Replaces the Brave New World game core DLL with one that exposes the game state and actions to Claude over MCP (http://127.0.0.1:7676/mcp), so Claude can play a civilization. Adds a "Claude Log" button that shows Claude's reasoning.</Description>
+    <Name>Local MCP Server DLL</Name>
+    <Teaser>Runs a local MCP server so an AI model can play Civilization V.</Teaser>
+    <Description>Replaces the Brave New World game core DLL with one that runs an MCP server on this PC at http://127.0.0.1:7676/mcp. An AI model connected through an MCP client on the same PC, such as Claude Code, can play your civilization, a teammate or an opponent. Adds an AI Log button that shows what it is doing. Single player only. Not compatible with other mods that replace the game DLL.</Description>
     <Authors>Jason Spradlin</Authors>
     <HideSetupGame>0</HideSetupGame>
     <AffectsSavedGames>1</AffectsSavedGames>
@@ -21,7 +21,11 @@
     <Dlc id="6DA07636-4123-4018-B643-6575B4EC336B" minversion="0" maxversion="999" />
   </Dependencies>
   <References />
-  <Blocks />
+  <Blocks>
+    <Mod id="d1b6328c-ff44-4b0d-aad7-c657f83610cd" minversion="0" maxversion="999" title="(1) Community Patch" />
+    <Mod id="ab0bea08-fb7a-4c23-9234-cbe5252552b6" minversion="0" maxversion="999" title="__Gaia's Core Mod__" />
+    <Mod id="508e056f-706a-4e17-8fd5-464cdcdfd660" minversion="0" maxversion="999" title="_36 Major Civilizations_" />
+  </Blocks>
   <Files>
 {{FILES}}
   </Files>
@@ -32,8 +36,8 @@
   </Actions>
   <EntryPoints>
     <EntryPoint type="InGameUIAddin" file="UI/ClaudeLog.xml">
-      <Name>Claude Log</Name>
-      <Description>Shows Claude's reasoning</Description>
+      <Name>AI Log</Name>
+      <Description>Shows what the AI player is doing</Description>
     </EntryPoint>
   </EntryPoints>
 </Mod>

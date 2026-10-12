@@ -51,7 +51,7 @@ namespace
 {
 	void DiagLog(const std::string& msg)
 	{
-		FILogFile* pLog = LOGFILEMGR.GetLog("ClaudePlayer.log", FILogFile::kDontTimeStamp);
+		FILogFile* pLog = LOGFILEMGR.GetLog("MCPServer.log", FILogFile::kDontTimeStamp);
 		if(pLog) pLog->Msg("%s", msg.c_str());
 	}
 
@@ -495,7 +495,7 @@ void ClaudeBridge::Impl::LogLine(const char* category, const std::string& text)
 	while(log.size() > CLAUDE_MAX_LOG_ENTRIES) log.pop_front();
 	LeaveCriticalSection(&lock);
 
-	FILogFile* pLog = LOGFILEMGR.GetLog("ClaudeThinking.log", FILogFile::kDontTimeStamp);
+	FILogFile* pLog = LOGFILEMGR.GetLog("AIThinking.log", FILogFile::kDontTimeStamp);
 	if(pLog) pLog->Msg("[%s] %s", category, text.c_str());
 }
 
@@ -588,7 +588,7 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bo
 		picojson::object caps;
 		caps["tools"] = picojson::value(picojson::object());
 		picojson::object info;
-		info["name"] = picojson::value("civ5-claude-player");
+		info["name"] = picojson::value("civ5-local-mcp-server");
 		info["version"] = picojson::value("0.1");
 		picojson::object result;
 		result["protocolVersion"] = picojson::value(version);

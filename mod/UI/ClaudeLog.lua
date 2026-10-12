@@ -1,4 +1,4 @@
--- Claude Player UI add-in: the log popup (Game.GetClaudeLog) and popup capture.
+-- Local MCP Server DLL UI add-in: the log popup (Game.GetClaudeLog) and popup capture.
 -- Every game popup is reported to the DLL (Game.ClaudeNotePopup). It stays open
 -- until Claude acknowledges it; the DLL then names the dialog in Game.ClaudeDialogsToClose.
 include("InstanceManager");
@@ -25,7 +25,7 @@ local CATEGORIES = {
 
 local g_Lines = InstanceManager:new("LineInstance", "Text", Controls.LineStack);
 local g_Filters = InstanceManager:new("FilterInstance", "Root", Controls.FilterStack);
-local g_Settings = Modding.OpenUserData("ClaudePlayerLog", 1);
+local g_Settings = Modding.OpenUserData("LocalMCPServerDLL_Log", 1);
 local g_Shown = {};
 local g_LastSeq = -1;
 local g_LastVisible = nil;
@@ -59,7 +59,7 @@ local function Refresh(bToBottom)
 	local lines = {};
 	if not bVisible then
 		table.insert(lines, "This AI player is your opponent, so its log is hidden.");
-		table.insert(lines, "Its full thinking is in the window it runs in, and in ClaudeThinking.log in the game's Logs folder.");
+		table.insert(lines, "Its full thinking is in the window it runs in, and in AIThinking.log in the game's Logs folder.");
 	end
 	for _, entry in ipairs(entries or {}) do
 		if entry.Category == "always" or g_Shown[entry.Category] ~= false then
