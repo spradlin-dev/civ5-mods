@@ -53,6 +53,11 @@ public:
 	ClaudeIdentity Identity();
 	void SetIdentity(const ClaudeIdentity& identity);
 
+	// Any thread. The mods loaded in this game, as "Name (v N)"; the in-game UI script
+	// reports them when a game loads, since only the UI's Modding API can list them.
+	std::vector<std::string> ActiveMods();
+	void SetActiveMods(const std::vector<std::string>& mods);
+
 	// Game thread. Appends to the in-game log, inserting a separator when the turn changed.
 	void LogLine(const char* category, const std::string& text);
 

@@ -47,6 +47,10 @@ CLAUDE_TOOL(ToolStatus)
 	CvGame& g = GC.getGame();
 	JObj o;
 	o["game_id"] = J(ClaudeGameId());
+	JArr mods;
+	std::vector<std::string> active = ClaudeBridge::Get().ActiveMods();
+	for(size_t i = 0; i < active.size(); ++i) mods.push_back(J(active[i]));
+	o["mods"] = JVal(mods);
 	o["turn"] = J(g.getGameTurn());
 	o["year"] = J(g.getGameTurnYear());
 	o["max_turns"] = J(g.getMaxTurns());

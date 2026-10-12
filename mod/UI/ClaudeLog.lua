@@ -202,6 +202,17 @@ end
 
 UpdateIdentity();
 
+local function ReportActiveMods()
+	local mods = {};
+	for _, v in ipairs(Modding.GetActivatedMods()) do
+		local name = Modding.GetModProperty(v.ID, v.Version, "Name") or v.ID;
+		table.insert(mods, string.format("%s (v %d)", name, v.Version));
+	end
+	Game.ClaudeSetActiveMods(table.concat(mods, "
+"));
+end
+ReportActiveMods();
+
 ContextPtr:SetUpdate(function(fDeltaTime)
 	CollectAcknowledged();
 	g_SinceIdentity = g_SinceIdentity + fDeltaTime;

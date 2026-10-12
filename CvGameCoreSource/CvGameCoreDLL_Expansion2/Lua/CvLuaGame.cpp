@@ -101,6 +101,7 @@ void CvLuaGame::RegisterMembers(lua_State* L)
 	Method(GetClaudeLog);
 	Method(GetClaudeIdentity);
 	Method(ClaudeNotePopup);
+	Method(ClaudeSetActiveMods);
 	Method(ClaudeDialogsToClose);
 	Method(SetGameTurn);
 	Method(GetTurnYear);
@@ -745,6 +746,24 @@ int CvLuaGame::lGetClaudeIdentity(lua_State* L)
 	lua_pushstring(L, id.version.c_str());
 	lua_pushstring(L, ClaudeIdentityLabel().c_str());
 	return 4;
+}
+//------------------------------------------------------------------------------
+//void ClaudeSetActiveMods(string modsOnePerLine);
+int CvLuaGame::lClaudeSetActiveMods(lua_State* L)
+{
+	const char* szMods = lua_tostring(L, 1);
+	std::vector<std::string> mods;
+	std::string all = szMods ? szMods : "";
+	size_t start = 0;
+	while(start < all.size())
+	{
+		size_t end = all.find('\n', start);
+		if(end == std::string::npos) end = all.size();
+		if(end > start) mods.push_back(all.substr(start, end - start));
+		start = end + 1;
+	}
+	ClaudeBridge::Get().SetActiveMods(mods);
+	return 0;
 }
 //------------------------------------------------------------------------------
 //void ClaudeNotePopup(int type, int data1, int data2, int data3, bool option1, string text);

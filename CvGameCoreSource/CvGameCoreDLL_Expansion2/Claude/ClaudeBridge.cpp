@@ -102,6 +102,7 @@ struct ClaudeBridge::Impl
 	std::deque<ClaudeJob*> jobs;
 	std::deque<ClaudeLogEntry> log;
 	ClaudeIdentity identity;
+	std::vector<std::string> activeMods;
 	volatile int identityVersion; // bumped on every change; Tick relabels the seat when it moves
 	int labelledIdentityVersion;  // game thread
 	int logSeq;
@@ -168,6 +169,21 @@ ClaudeIdentity ClaudeBridge::Identity()
 	ClaudeIdentity id = m_pImpl->identity;
 	LeaveCriticalSection(&m_pImpl->lock);
 	return id;
+}
+
+std::vector<std::string> ClaudeBridge::ActiveMods()
+{
+	EnterCriticalSection(&m_pImpl->lock);
+	std::vector<std::string> mods = m_pImpl->activeMods;
+	LeaveCriticalSection(&m_pImpl->lock);
+	return mods;
+}
+
+void ClaudeBridge::SetActiveMods(const std::vector<std::string>& mods)
+{
+	EnterCriticalSection(&m_pImpl->lock);
+	m_pImpl->activeMods = mods;
+	LeaveCriticalSection(&m_pImpl->lock);
 }
 
 void ClaudeBridge::SetIdentity(const ClaudeIdentity& identity)
@@ -605,6 +621,8 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bo
 		    "status.game_id names this game across reloads and reconnections: keep your memories about this game "
 		    "(your role, plans, what you learned about the other players) under that id, keep lessons for every game separate, "
 		    "and when you connect, look up your memories for this game_id before you play. "
+		    "status.mods lists the mods loaded in this game; they can change between loads, so on every connection "
+		    "compare them with what you remembered for this game_id and record the current list. "
 		    "Right after naming yourself, call status and tell the human in your reply who you are and what you play: "
 		    "their own civilization, a teammate (name it), or an opponent (never name it; they will see you once they meet you). "
 		    "If no seat is claimed and the human has not told you your role, ask them first and offer the choices: "
