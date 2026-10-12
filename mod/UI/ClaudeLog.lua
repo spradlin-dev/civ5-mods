@@ -202,14 +202,21 @@ end
 
 UpdateIdentity();
 
+local MAX_MOD_DESCRIPTION = 400;
+
+-- One line per mod: "Name (v N)", a tab, then the description flattened to one line.
 local function ReportActiveMods()
 	local mods = {};
 	for _, v in ipairs(Modding.GetActivatedMods()) do
 		local name = Modding.GetModProperty(v.ID, v.Version, "Name") or v.ID;
-		table.insert(mods, string.format("%s (v %d)", name, v.Version));
+		local description = Modding.GetModProperty(v.ID, v.Version, "Description") or "";
+		description = description:gsub("%[NEWLINE%]", " "):gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "");
+		if #description > MAX_MOD_DESCRIPTION then
+			description = description:sub(1, MAX_MOD_DESCRIPTION) .. "...";
+		end
+		table.insert(mods, string.format("%s (v %d)\t%s", (name:gsub("%s+", " ")), v.Version, description));
 	end
-	Game.ClaudeSetActiveMods(table.concat(mods, "
-"));
+	Game.ClaudeSetActiveMods(table.concat(mods, "\n"));
 end
 ReportActiveMods();
 

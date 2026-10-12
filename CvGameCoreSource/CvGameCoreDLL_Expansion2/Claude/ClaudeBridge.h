@@ -23,6 +23,13 @@ struct ClaudeIdentity
 	std::string version;
 };
 
+// A mod loaded in the current game: "Name (v N)" and its description, on one line.
+struct ClaudeModInfo
+{
+	std::string name;
+	std::string description;
+};
+
 // One line of the in-game Claude Log; category is one of the CLAUDE_LOG_ names.
 struct ClaudeLogEntry
 {
@@ -53,10 +60,10 @@ public:
 	ClaudeIdentity Identity();
 	void SetIdentity(const ClaudeIdentity& identity);
 
-	// Any thread. The mods loaded in this game, as "Name (v N)"; the in-game UI script
-	// reports them when a game loads, since only the UI's Modding API can list them.
-	std::vector<std::string> ActiveMods();
-	void SetActiveMods(const std::vector<std::string>& mods);
+	// Any thread. The mods loaded in this game; the in-game UI script reports them when a
+	// game loads, since only the UI's Modding API can list them.
+	std::vector<ClaudeModInfo> ActiveMods();
+	void SetActiveMods(const std::vector<ClaudeModInfo>& mods);
 
 	// Game thread. Appends to the in-game log, inserting a separator when the turn changed.
 	void LogLine(const char* category, const std::string& text);

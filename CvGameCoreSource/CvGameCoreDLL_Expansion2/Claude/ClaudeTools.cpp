@@ -40,6 +40,23 @@ namespace
 	}
 }
 
+CLAUDE_TOOL(ToolMods)
+{
+	JArr mods;
+	std::vector<ClaudeModInfo> active = ClaudeBridge::Get().ActiveMods();
+	for(size_t i = 0; i < active.size(); ++i)
+	{
+		JObj m;
+		m["name"] = J(active[i].name);
+		m["description"] = J(active[i].description);
+		mods.push_back(JVal(m));
+	}
+	JObj o;
+	o["mods"] = JVal(mods);
+	if(active.empty()) o["note"] = J("no mods reported yet: the game's interface reports them a moment after the map loads; try again shortly");
+	return JVal(o);
+}
+
 CLAUDE_TOOL(ToolStatus)
 {
 	CvPlayer* me = Me(err);
@@ -48,8 +65,8 @@ CLAUDE_TOOL(ToolStatus)
 	JObj o;
 	o["game_id"] = J(ClaudeGameId());
 	JArr mods;
-	std::vector<std::string> active = ClaudeBridge::Get().ActiveMods();
-	for(size_t i = 0; i < active.size(); ++i) mods.push_back(J(active[i]));
+	std::vector<ClaudeModInfo> active = ClaudeBridge::Get().ActiveMods();
+	for(size_t i = 0; i < active.size(); ++i) mods.push_back(J(active[i].name));
 	o["mods"] = JVal(mods);
 	o["turn"] = J(g.getGameTurn());
 	o["year"] = J(g.getGameTurnYear());
@@ -848,6 +865,9 @@ namespace
 		{ "policy_options",
 		  "Social policy branches and policies: what is unlocked, adoptable now, and what each does; plus your culture and the next policy cost.",
 		  SCHEMA_EMPTY, ToolPolicyOptions, LOG_NONE, false },
+		{ "mods",
+		  "The mods loaded in this game, each with its version and the description its author wrote, so you know how the game differs from the standard rules. They can change between loads of the same game.",
+		  SCHEMA_EMPTY, ToolMods, LOG_NONE, false },
 		{ "civs",
 		  "Every civilization and city-state you have met: war or peace, their attitude toward you, friendship levels, relative strength, and known capitals.",
 		  SCHEMA_EMPTY, ToolCivs, LOG_NONE, false },

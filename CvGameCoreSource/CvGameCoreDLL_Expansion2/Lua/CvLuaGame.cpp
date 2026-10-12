@@ -748,18 +748,23 @@ int CvLuaGame::lGetClaudeIdentity(lua_State* L)
 	return 4;
 }
 //------------------------------------------------------------------------------
-//void ClaudeSetActiveMods(string modsOnePerLine);
+//void ClaudeSetActiveMods(string mods); one mod per line, "name<\t>description".
 int CvLuaGame::lClaudeSetActiveMods(lua_State* L)
 {
 	const char* szMods = lua_tostring(L, 1);
-	std::vector<std::string> mods;
+	std::vector<ClaudeModInfo> mods;
 	std::string all = szMods ? szMods : "";
 	size_t start = 0;
 	while(start < all.size())
 	{
 		size_t end = all.find('\n', start);
 		if(end == std::string::npos) end = all.size();
-		if(end > start) mods.push_back(all.substr(start, end - start));
+		std::string line = all.substr(start, end - start);
+		size_t tab = line.find('\t');
+		ClaudeModInfo mod;
+		mod.name = line.substr(0, tab);
+		if(tab != std::string::npos) mod.description = line.substr(tab + 1);
+		if(!mod.name.empty()) mods.push_back(mod);
 		start = end + 1;
 	}
 	ClaudeBridge::Get().SetActiveMods(mods);
