@@ -25,6 +25,21 @@ using namespace ClaudeTool;
 
 // ------------------------------------------------------------------ queries
 
+namespace
+{
+	// Computer-run major civilizations the seat could take: on the on-screen human's team, or against it.
+	std::vector<PlayerTypes> ClaimableCivs(bool bTeammates)
+	{
+		std::vector<PlayerTypes> out;
+		for(int i = 0; i < MAX_MAJOR_CIVS; ++i)
+		{
+			CvPlayer& p = GET_PLAYER((PlayerTypes)i);
+			if(p.isAlive() && !p.isHuman() && ClaudeOnScreenTeam((PlayerTypes)i) == bTeammates) out.push_back((PlayerTypes)i);
+		}
+		return out;
+	}
+}
+
 CLAUDE_TOOL(ToolStatus)
 {
 	CvPlayer* me = Me(err);
@@ -44,7 +59,20 @@ CLAUDE_TOOL(ToolStatus)
 	o["ai_processing"] = J(AiProcessing());
 	o["end_turn_blocking"] = J(BlockingName(EndTurnBlocking(me)));
 	o["units_needing_orders"] = J(me->GetCountReadyUnits());
-	o["seat"] = J(ClaudeSeatOnScreen() ? "on screen: the human player's own civilization" : "claimed: off screen, the human on screen plays another civilization");
+	if(ClaudeSeatOnScreen())
+	{
+		o["seat"] = J("none claimed: you act for the human's own civilization");
+		JArr mates;
+		std::vector<PlayerTypes> teammates = ClaimableCivs(true);
+		for(size_t i = 0; i < teammates.size(); ++i) mates.push_back(J(CivName(teammates[i])));
+		o["teammate_civs_you_could_play"] = JVal(mates);
+		o["opponent_civs_you_could_play"] = J((int)ClaimableCivs(false).size());
+	}
+	else
+	{
+		o["seat"] = J("claimed: off screen, the human on screen plays another civilization");
+		o["role"] = J(!ClaudeOnScreenTeam(me->GetID()) ? "opponent: never tell the human which civilization you play" : "teammate of the human");
+	}
 	std::string label = ClaudeIdentityLabel();
 	o["playing_as"] = J(label.empty() ? std::string("nobody yet: call set_identity before acting") : label);
 	return JVal(o);
@@ -706,12 +734,20 @@ CLAUDE_TOOL(ToolTakeSeat)
 {
 	if(!RequireIdentity(err)) return JVal();
 	std::string key = ArgStr(args, "civ");
-	PlayerTypes e = FindPlayer(key);
-	if(e == NO_PLAYER) { err = "unknown civilization '" + key + "'; use a name from civs"; return JVal(); }
+	PlayerTypes e = NO_PLAYER;
+	if(key == "teammate" || key == "opponent")
+	{
+		std::vector<PlayerTypes> choices = ClaimableCivs(key == "teammate");
+		if(choices.empty()) { err = "no computer-run " + key + " civilization is left to play"; return JVal(); }
+		e = choices[GC.getGame().getAsyncRandNum((int)choices.size(), "Claude seat pick")];
+	}
+	else e = FindPlayer(key);
+	if(e == NO_PLAYER) { err = "unknown civilization '" + key + "'; use a name from civs, or teammate or opponent"; return JVal(); }
 	if(!ClaudeClaimSeat(e, err)) return JVal();
 	JObj o;
 	o["ok"] = J(true);
 	o["playing"] = J(CivName(e));
+	if(!ClaudeOnScreenTeam(e)) o["secret"] = J("you are the human's opponent: never tell them which civilization you play; they will see you once they meet you");
 	o["next"] = J("call wait_for_my_turn; your turn comes after the human's each round");
 	return JVal(o);
 }
@@ -947,7 +983,7 @@ namespace
 		  "Name yourself; call it first on every connection. provider is your maker's product (Claude, ChatGPT, Gemini), model your model family (Opus, Fable, GPT) and version its version (5.5). The game shows it after your leader's name, e.g. Dido (Claude Opus 5.5), and on the log button.",
 		  "{\"type\":\"object\",\"properties\":{\"provider\":{\"type\":\"string\"},\"model\":{\"type\":\"string\"},\"version\":{\"type\":\"string\"}},\"required\":[\"provider\",\"model\",\"version\"]}", ToolSetIdentity, LOG_TURN, false },
 		{ "take_seat",
-		  "Play a computer-controlled civilization in a shared game: it becomes a human seat for you at the human's difficulty, and the game's AI stops acting for it. The human on screen tells you which civilization; claim it during their turn. Until a seat is claimed every tool acts on the human's own civilization.",
+		  "Play a computer-controlled civilization in a shared game: it becomes a human seat for you at the human's difficulty, and the game's AI stops acting for it. The human on screen tells you which civilization, or civ=teammate or civ=opponent to have the game pick one; claim it during their turn. Until a seat is claimed every tool acts on the human's own civilization.",
 		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"}},\"required\":[\"civ\"]}", ToolTakeSeat, LOG_TURN, false },
 		{ "release_seat",
 		  "Hand the claimed civilization back to the game's AI.",

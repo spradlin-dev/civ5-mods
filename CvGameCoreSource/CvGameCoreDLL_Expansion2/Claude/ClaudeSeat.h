@@ -22,6 +22,9 @@ std::string ClaudeIdentityLabel();
 // or just the leader while no model has named itself.
 void ClaudeUpdateSeatLabel();
 
+// Game thread. True when e is the player on screen or on its team (also when nobody is on screen).
+bool ClaudeOnScreenTeam(PlayerTypes e);
+
 // Game thread. Whether the player on screen may read the AI player's log: when the AI plays the
 // on-screen civilization or one on its team, not when it is an opponent.
 bool ClaudeLogVisibleOnScreen();

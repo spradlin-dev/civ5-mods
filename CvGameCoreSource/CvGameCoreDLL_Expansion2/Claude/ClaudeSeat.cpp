@@ -19,6 +19,12 @@ namespace
 		return _stricmp(s.c_str(), SEAT_NAME) == 0;
 	}
 
+	// The log is readable on screen, so an opponent's civilization is not named in it.
+	std::string SeatNameForScreen(PlayerTypes e)
+	{
+		return ClaudeOnScreenTeam(e) ? GET_PLAYER(e).getCivilizationShortDescription() : "an opponent civilization";
+	}
+
 	PlayerTypes NamedSeat()
 	{
 		PlayerTypes eActive = GC.getGame().getActivePlayer();
@@ -66,7 +72,7 @@ bool ClaudeClaimSeat(PlayerTypes ePlayer, std::string& err)
 	PlayerTypes eActive = game.getActivePlayer();
 	if(eActive != NO_PLAYER) CvPreGame::setHandicap(ePlayer, CvPreGame::handicap(eActive));
 	ClaudeUpdateSeatLabel();
-	ClaudeBridge::Get().LogLine(CLAUDE_LOG_TURN, ClaudeIdentityLabel() + " now plays " + p.getCivilizationShortDescription() + " at the human's difficulty");
+	ClaudeBridge::Get().LogLine(CLAUDE_LOG_TURN, ClaudeIdentityLabel() + " now plays " + SeatNameForScreen(ePlayer) + " at the human's difficulty");
 	return true;
 }
 
@@ -79,16 +85,20 @@ bool ClaudeReleaseSeat(std::string& err)
 	CvPreGame::setNickname(e, CvString(""));
 	CvPreGame::setLeaderName(e, CvString(""));
 	CvPreGame::setHandicap(e, (HandicapTypes)GC.getAI_HANDICAP());
-	ClaudeBridge::Get().LogLine(CLAUDE_LOG_TURN, std::string("The game's AI now plays ") + GET_PLAYER(e).getCivilizationShortDescription());
+	ClaudeBridge::Get().LogLine(CLAUDE_LOG_TURN, "The game's AI now plays " + SeatNameForScreen(e));
 	return true;
+}
+
+bool ClaudeOnScreenTeam(PlayerTypes e)
+{
+	PlayerTypes eActive = GC.getGame().getActivePlayer();
+	return eActive == NO_PLAYER || GET_PLAYER(e).getTeam() == GET_PLAYER(eActive).getTeam();
 }
 
 bool ClaudeLogVisibleOnScreen()
 {
 	PlayerTypes eSeat = ClaudeSeat();
-	PlayerTypes eActive = GC.getGame().getActivePlayer();
-	if(eSeat == NO_PLAYER || eActive == NO_PLAYER) return true;
-	return GET_PLAYER(eSeat).getTeam() == GET_PLAYER(eActive).getTeam();
+	return eSeat == NO_PLAYER || ClaudeOnScreenTeam(eSeat);
 }
 
 std::string ClaudeIdentityLabel()
