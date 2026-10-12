@@ -186,8 +186,13 @@ std::string ClaudeDescribeCall(const ClaudeToolDef& tool, const JObj& args)
 	if(name == "buy") return CityText(args, "city_id") + ": buy " + TypeName(ArgStr(args, "item")) + (ArgBool(args, "with_faith", false) ? " with faith" : "");
 	if(name == "set_research") return "Research " + TypeName(ArgStr(args, "tech"));
 	if(name == "adopt_policy") return "Adopt " + TypeName(ArgStr(args, "policy"));
-	if(name == CLAUDE_TOOL_END_TURN) return ArgBool(args, "force", false) ? "End turn, leaving idle units as they are" : "End turn";
+	if(name == CLAUDE_TOOL_END_TURN)
+	{
+		std::string summary = ArgStr(args, "summary");
+		return std::string(ArgBool(args, "force", false) ? "End turn, leaving idle units as they are" : "End turn") + (summary.empty() ? "" : ": " + summary);
+	}
 	if(name == "acknowledge_messages") return "Read game messages" + IdList(args);
+	if(name == "set_identity") return "The player names itself";
 	std::string rest = ArgsText(args);
 	return Words(name) + (rest.empty() ? "" : ": " + rest);
 }
@@ -197,6 +202,7 @@ std::string ClaudeDescribeResult(const ClaudeToolDef& tool, const JVal& result)
 	if(!result.is<JObj>()) return "";
 	const JObj& r = result.get<JObj>();
 	const std::string name = tool.name;
+	if(name == "set_identity") return "now playing: " + ArgStr(r, "playing_as");
 	if(name == "move_unit" && !ArgBool(r, "arrived", true))
 		return ClaudeFormat("on the way, about %d turns in all", ArgInt(r, "estimated_turns_total", 0));
 	if(name != "attack" && name != "city_attack") return "";

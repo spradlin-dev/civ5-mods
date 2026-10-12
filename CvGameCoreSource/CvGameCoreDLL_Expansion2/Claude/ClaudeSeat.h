@@ -16,6 +16,12 @@ bool ClaudeSeatOnScreen();
 bool ClaudeClaimSeat(PlayerTypes ePlayer, std::string& err);
 bool ClaudeReleaseSeat(std::string& err);
 
+// The connected model's name, e.g. "Claude Opus 5.5"; "" until it has named itself.
+std::string ClaudeIdentityLabel();
+// Game thread. Shows that name after the claimed seat's leader, e.g. "Dido (Claude Opus 5.5)",
+// or just the leader while no model has named itself.
+void ClaudeUpdateSeatLabel();
+
 // Game thread. Records a popup the game only shows to the player on screen, when
 // it is for Claude's off-screen seat (or that seat's team). Same arguments as the
 // game's popup info.

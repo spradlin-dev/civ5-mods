@@ -101,6 +101,9 @@ struct ClaudeBridge::Impl
 	CRITICAL_SECTION lock; // guards jobs, log and every job state transition
 	std::deque<ClaudeJob*> jobs;
 	std::deque<ClaudeLogEntry> log;
+	ClaudeIdentity identity;
+	volatile int identityVersion; // bumped on every change; Tick relabels the seat when it moves
+	int labelledIdentityVersion;  // game thread
 	int logSeq;
 	int lastLogTurn;
 	std::vector<ClaudePendingPopup> pendingPopups; // written by the UI thread, drained by Tick
@@ -155,6 +158,22 @@ ClaudeBridge::~ClaudeBridge() { delete m_pImpl; }
 void ClaudeBridge::Tick() { m_pImpl->Tick(); }
 void ClaudeBridge::Shutdown() { m_pImpl->Shutdown(); }
 void ClaudeBridge::LogLine(const char* category, const std::string& text) { m_pImpl->LogLine(category, text); }
+
+ClaudeIdentity ClaudeBridge::Identity()
+{
+	EnterCriticalSection(&m_pImpl->lock);
+	ClaudeIdentity id = m_pImpl->identity;
+	LeaveCriticalSection(&m_pImpl->lock);
+	return id;
+}
+
+void ClaudeBridge::SetIdentity(const ClaudeIdentity& identity)
+{
+	EnterCriticalSection(&m_pImpl->lock);
+	m_pImpl->identity = identity;
+	++m_pImpl->identityVersion;
+	LeaveCriticalSection(&m_pImpl->lock);
+}
 int ClaudeBridge::GetLog(std::vector<ClaudeLogEntry>& out) { return m_pImpl->GetLog(out); }
 
 void ClaudeBridge::NotePopup(int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text, bool bOnScreen)
@@ -219,7 +238,7 @@ std::vector<ClaudePopup> ClaudeBridge::GetPopupsSince(int iTurn)
 }
 
 ClaudeBridge::Impl::Impl()
-	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), logSeq(0), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0), gameTurn(-1), testingMode(false),
+	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), logSeq(0), identityVersion(0), labelledIdentityVersion(-1), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0), gameTurn(-1), testingMode(false),
 	  shuttingDown(false), myTurn(false), screenHumanTurn(false), lastTickMs(0)
 {
 	ClaudeInstallCrashHandler();
@@ -298,6 +317,11 @@ void ClaudeBridge::Impl::Tick()
 	int iTurn = GC.getGame().getGameTurn();
 	if(CvPreGame::mapRandomSeed() != gameSeed || iTurn < gameTurn) ResetForNewGame();
 	gameTurn = iTurn;
+	if(identityVersion != labelledIdentityVersion)
+	{
+		labelledIdentityVersion = identityVersion;
+		ClaudeUpdateSeatLabel();
+	}
 	UpdateTurnFlags();
 	DrainPopups();
 
@@ -399,6 +423,7 @@ void ClaudeBridge::Impl::ResetForNewGame()
 	dialogsToClose.clear();
 	testingMode = false;
 	LeaveCriticalSection(&lock);
+	labelledIdentityVersion = -1; // a loaded save carries the label of whichever model played it
 	ClaudeResetDiploRequests();
 }
 
@@ -550,6 +575,7 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bo
 
 	if(method == "initialize")
 	{
+		ClaudeBridge::Get().SetIdentity(ClaudeIdentity());
 		std::string version = "2025-06-18";
 		picojson::object::const_iterator itV = params.find("protocolVersion");
 		if(itV != params.end() && itV->second.is<std::string>() && !itV->second.get<std::string>().empty())
@@ -565,8 +591,10 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bo
 		result["capabilities"] = picojson::value(caps);
 		result["serverInfo"] = picojson::value(info);
 		result["instructions"] = picojson::value(
-		    "You are playing Civilization V as the active human player. Call wait_for_my_turn until it is your turn, "
-		    "then use the query tools, act, write your reasoning with log, and finish with end_turn. "
+		    "You are playing Civilization V as the active human player. First, name yourself with set_identity: "
+		    "your provider (Claude, ChatGPT, Gemini...), model (Opus, Fable, GPT...) and version (5.5...); actions are refused until you do, "
+		    "and you must do it again after every reconnect. Then call wait_for_my_turn until it is your turn, "
+		    "use the query tools, act, write your reasoning with log, and finish with end_turn and a short summary of what you did. "
 		    "A unit with a queued multi-turn move is still where it stopped when your next turn opens; it moves when you call end_turn, "
 		    "as for a human clicking End Turn. Leave it alone unless you want it to go somewhere else. "
 		    "In a shared game the human tells you which civilization to play: claim it with take_seat during their turn. "

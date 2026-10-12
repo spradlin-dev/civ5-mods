@@ -8,7 +8,7 @@ local MAX_LINES_SHOWN = 400;
 -- The DLL tags every log entry with one of these categories (Claude/ClaudeLogText.h);
 -- entries tagged "always" are shown whatever is filtered.
 local CATEGORIES = {
-	{ key = "reasoning", label = "Claude's notes" },
+	{ key = "reasoning", label = "Notes" },
 	{ key = "turn", label = "Turns" },
 	{ key = "movement", label = "Military moves" },
 	{ key = "military", label = "Military orders" },
@@ -29,6 +29,21 @@ local g_Settings = Modding.OpenUserData("ClaudePlayerLog", 1);
 local g_Shown = {};
 local g_LastSeq = -1;
 local g_SinceRefresh = 0;
+local g_SinceIdentity = 0;
+local g_IdentityLabel = nil;
+
+-- The connected model names itself (set_identity), e.g. Claude / Opus / 5.5; "AI" until it has.
+local function UpdateIdentity()
+	local _, model, _, label = Game.GetClaudeIdentity();
+	if label == g_IdentityLabel then
+		return;
+	end
+	g_IdentityLabel = label;
+	local short = (model ~= "") and string.sub(model, 1, 12) or "AI";
+	Controls.OpenButtonLabel:SetText(short .. " Log");
+	Controls.OpenButton:SetToolTipString("Show what " .. short .. " is thinking");
+	Controls.Title:SetText(((label ~= "") and label or "AI") .. " Log");
+end
 
 -- bToBottom: jump to the newest line; otherwise only follow it if the reader is already there.
 local function Refresh(bToBottom)
@@ -173,8 +188,15 @@ local function DismissPending(fDeltaTime)
 	g_PendingDismiss = remaining;
 end
 
+UpdateIdentity();
+
 ContextPtr:SetUpdate(function(fDeltaTime)
 	CollectAcknowledged();
+	g_SinceIdentity = g_SinceIdentity + fDeltaTime;
+	if g_SinceIdentity >= 1.0 then
+		g_SinceIdentity = 0;
+		UpdateIdentity();
+	end
 	if #g_PendingDismiss > 0 then
 		DismissPending(fDeltaTime);
 	end

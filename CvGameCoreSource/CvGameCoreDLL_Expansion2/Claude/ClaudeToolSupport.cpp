@@ -99,10 +99,17 @@ namespace ClaudeTool
 		return &GET_PLAYER(e);
 	}
 
+	bool RequireIdentity(std::string& err)
+	{
+		if(!ClaudeBridge::Get().Identity().model.empty()) return true;
+		err = "name yourself first: call set_identity with your provider, model and version";
+		return false;
+	}
+
 	CvPlayer* MeActing(std::string& err)
 	{
 		CvPlayer* me = Me(err);
-		if(!me) return NULL;
+		if(!me || !RequireIdentity(err)) return NULL;
 		if(!ClaudeIsPlayerTurn(*me))
 		{
 			err = "it is not your turn right now (the turn is ending or other civilizations are moving); call wait_for_my_turn";

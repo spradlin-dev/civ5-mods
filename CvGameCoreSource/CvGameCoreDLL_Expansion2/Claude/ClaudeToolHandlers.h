@@ -22,6 +22,7 @@ CLAUDE_TOOL(ToolSetResearch);
 CLAUDE_TOOL(ToolEndTurn);
 CLAUDE_TOOL(ToolLog);
 CLAUDE_TOOL(ToolAcknowledgeMessages);
+CLAUDE_TOOL(ToolSetIdentity);
 CLAUDE_TOOL(ToolTakeSeat);
 CLAUDE_TOOL(ToolReleaseSeat);
 CLAUDE_TOOL(ToolSkipHumanTurn);

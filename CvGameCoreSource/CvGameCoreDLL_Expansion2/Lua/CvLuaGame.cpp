@@ -23,6 +23,7 @@
 
 #include "../CvGame.h"
 #include "../Claude/ClaudeBridge.h"
+#include "../Claude/ClaudeSeat.h"
 #include "../CvGameCoreUtils.h"
 #include "../CvInternalGameCoreUtils.h"
 #include "../CvGameTextMgr.h"
@@ -98,6 +99,7 @@ void CvLuaGame::RegisterMembers(lua_State* L)
 	Method(GetNumSequentialHumans);
 	Method(GetGameTurn);
 	Method(GetClaudeLog);
+	Method(GetClaudeIdentity);
 	Method(ClaudeNotePopup);
 	Method(ClaudeDialogsToClose);
 	Method(SetGameTurn);
@@ -728,6 +730,17 @@ int CvLuaGame::lGetClaudeLog(lua_State* L)
 		lua_rawseti(L, -2, (int)i + 1);
 	}
 	return 2;
+}
+//------------------------------------------------------------------------------
+//string, string, string, string GetClaudeIdentity(); provider, model, version and the joined label, "" until the model has named itself.
+int CvLuaGame::lGetClaudeIdentity(lua_State* L)
+{
+	ClaudeIdentity id = ClaudeBridge::Get().Identity();
+	lua_pushstring(L, id.provider.c_str());
+	lua_pushstring(L, id.model.c_str());
+	lua_pushstring(L, id.version.c_str());
+	lua_pushstring(L, ClaudeIdentityLabel().c_str());
+	return 4;
 }
 //------------------------------------------------------------------------------
 //void ClaudeNotePopup(int type, int data1, int data2, int data3, bool option1, string text);

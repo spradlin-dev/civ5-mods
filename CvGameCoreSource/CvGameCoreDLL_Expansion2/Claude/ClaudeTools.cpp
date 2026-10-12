@@ -45,6 +45,8 @@ CLAUDE_TOOL(ToolStatus)
 	o["end_turn_blocking"] = J(BlockingName(EndTurnBlocking(me)));
 	o["units_needing_orders"] = J(me->GetCountReadyUnits());
 	o["seat"] = J(ClaudeSeatOnScreen() ? "on screen: the human player's own civilization" : "claimed: off screen, the human on screen plays another civilization");
+	std::string label = ClaudeIdentityLabel();
+	o["playing_as"] = J(label.empty() ? std::string("nobody yet: call set_identity before acting") : label);
 	return JVal(o);
 }
 
@@ -667,8 +669,42 @@ CLAUDE_TOOL(ToolAcknowledgeMessages)
 	return JVal(o);
 }
 
+namespace
+{
+	// Letters, digits, spaces, dots and dashes only: the name is shown in the game, where brackets are markup.
+	std::string CleanName(const std::string& s)
+	{
+		std::string out;
+		for(size_t i = 0; i < s.size() && out.size() < 24; ++i)
+		{
+			unsigned char ch = (unsigned char)s[i];
+			if(isalnum(ch) || ch == ' ' || ch == '.' || ch == '-') out += (char)ch;
+		}
+		size_t b = out.find_first_not_of(' ');
+		return (b == std::string::npos) ? "" : out.substr(b, out.find_last_not_of(' ') - b + 1);
+	}
+}
+
+CLAUDE_TOOL(ToolSetIdentity)
+{
+	ClaudeIdentity id;
+	id.provider = CleanName(ArgStr(args, "provider"));
+	id.model = CleanName(ArgStr(args, "model"));
+	id.version = CleanName(ArgStr(args, "version"));
+	bool bHasLetter = false;
+	for(size_t i = 0; i < id.model.size(); ++i) bHasLetter = bHasLetter || isalnum((unsigned char)id.model[i]);
+	if(!bHasLetter) { err = "model is required (letters, digits, spaces, dots or dashes), e.g. Opus"; return JVal(); }
+	ClaudeBridge::Get().SetIdentity(id);
+	ClaudeUpdateSeatLabel();
+	JObj o;
+	o["ok"] = J(true);
+	o["playing_as"] = J(ClaudeIdentityLabel());
+	return JVal(o);
+}
+
 CLAUDE_TOOL(ToolTakeSeat)
 {
+	if(!RequireIdentity(err)) return JVal();
 	std::string key = ArgStr(args, "civ");
 	PlayerTypes e = FindPlayer(key);
 	if(e == NO_PLAYER) { err = "unknown civilization '" + key + "'; use a name from civs"; return JVal(); }
@@ -682,6 +718,7 @@ CLAUDE_TOOL(ToolTakeSeat)
 
 CLAUDE_TOOL(ToolReleaseSeat)
 {
+	if(!RequireIdentity(err)) return JVal();
 	if(!ClaudeReleaseSeat(err)) return JVal();
 	JObj o;
 	o["ok"] = J(true);
@@ -690,6 +727,7 @@ CLAUDE_TOOL(ToolReleaseSeat)
 
 CLAUDE_TOOL(ToolSkipHumanTurn)
 {
+	if(!RequireIdentity(err)) return JVal();
 	if(!ClaudeBridge::Get().TestingMode()) { err = "skip_human_turn is a testing tool: call testing_mode with enabled=true first"; return JVal(); }
 	PlayerTypes e = GC.getGame().getActivePlayer();
 	if(e == NO_PLAYER || !GET_PLAYER(e).isHuman()) { err = "no human player is on screen"; return JVal(); }
@@ -824,8 +862,8 @@ namespace
 		  "Declare war on a civilization or city-state (by name from civs). Irreversible for many turns; be sure.",
 		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"}},\"required\":[\"civ\"]}", ToolDeclareWar, LOG_DIPLOMACY, false },
 		{ CLAUDE_TOOL_END_TURN,
-		  "End your turn, after reading the briefing and giving orders. Refused while a decision is pending (research, production, policy...). If units still await orders it is refused too, unless force=true, which makes them skip this turn.",
-		  "{\"type\":\"object\",\"properties\":{\"force\":{\"type\":\"boolean\"}}}", ToolEndTurn, LOG_TURN, false },
+		  "End your turn, after reading the briefing and giving orders. summary is a sentence or two on what you did this turn, for the human reading the log. Refused while a decision is pending (research, production, policy...). If units still await orders it is refused too, unless force=true, which makes them skip this turn.",
+		  "{\"type\":\"object\",\"properties\":{\"summary\":{\"type\":\"string\"},\"force\":{\"type\":\"boolean\"}},\"required\":[\"summary\"]}", ToolEndTurn, LOG_TURN, false },
 		{ "acknowledge_messages",
 		  "Confirm you have read game messages (briefing.game_messages entries with unread=true). Actions are refused while any are unread. ids lists specific message ids; omit it to acknowledge all. Informational dialogs close in the game once acknowledged.",
 		  "{\"type\":\"object\",\"properties\":{\"ids\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}}}", ToolAcknowledgeMessages, LOG_MESSAGES, false },
@@ -901,12 +939,15 @@ namespace
 		  SCHEMA_EMPTY, ToolLaunchSpaceship, LOG_EMPIRE, false },
 		{ CLAUDE_TOOL_ADVANCE_ROUND,
 		  "TESTING ONLY (needs testing_mode enabled). Ends your turn, ends the on-screen human's turn when it opens, and waits for your next turn (about a minute at most). Returns status plus round_advanced / turn_reopened.",
-		  "{\"type\":\"object\",\"properties\":{\"force\":{\"type\":\"boolean\"}}}", NULL, LOG_TURN, false },
+		  "{\"type\":\"object\",\"properties\":{\"summary\":{\"type\":\"string\"},\"force\":{\"type\":\"boolean\"}}}", NULL, LOG_TURN, false },
 		{ "city_task",
 		  "Decide a city's fate or status: annex, puppet, raze, stop_razing or liberate (give a captured city back to its original owner).",
 		  "{\"type\":\"object\",\"properties\":{\"city_id\":{\"type\":\"integer\"},\"task\":{\"type\":\"string\"}},\"required\":[\"city_id\",\"task\"]}", ToolCityTask, LOG_CITY, false },
+		{ "set_identity",
+		  "Name yourself; call it first on every connection. provider is your maker's product (Claude, ChatGPT, Gemini), model your model family (Opus, Fable, GPT) and version its version (5.5). The game shows it after your leader's name, e.g. Dido (Claude Opus 5.5), and on the log button.",
+		  "{\"type\":\"object\",\"properties\":{\"provider\":{\"type\":\"string\"},\"model\":{\"type\":\"string\"},\"version\":{\"type\":\"string\"}},\"required\":[\"provider\",\"model\",\"version\"]}", ToolSetIdentity, LOG_TURN, false },
 		{ "take_seat",
-		  "Play a computer-controlled civilization in a shared game: it becomes a human seat named Claude at the human's difficulty, and the game's AI stops acting for it. The human on screen tells you which civilization; claim it during their turn. Until a seat is claimed every tool acts on the human's own civilization.",
+		  "Play a computer-controlled civilization in a shared game: it becomes a human seat for you at the human's difficulty, and the game's AI stops acting for it. The human on screen tells you which civilization; claim it during their turn. Until a seat is claimed every tool acts on the human's own civilization.",
 		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"}},\"required\":[\"civ\"]}", ToolTakeSeat, LOG_TURN, false },
 		{ "release_seat",
 		  "Hand the claimed civilization back to the game's AI.",

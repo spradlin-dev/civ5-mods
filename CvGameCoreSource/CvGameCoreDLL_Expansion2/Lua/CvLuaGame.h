@@ -89,6 +89,7 @@ protected:
 	static int lGetNumSequentialHumans(lua_State* L);
 	static int lGetGameTurn(lua_State* L);
 	static int lGetClaudeLog(lua_State* L);
+	static int lGetClaudeIdentity(lua_State* L);
 	static int lClaudeNotePopup(lua_State* L);
 	static int lClaudeDialogsToClose(lua_State* L);
 	static int lSetGameTurn(lua_State* L);

@@ -65,7 +65,8 @@ bool ClaudeClaimSeat(PlayerTypes ePlayer, std::string& err)
 	CvPreGame::setNickname(ePlayer, CvString(SEAT_NAME));
 	PlayerTypes eActive = game.getActivePlayer();
 	if(eActive != NO_PLAYER) CvPreGame::setHandicap(ePlayer, CvPreGame::handicap(eActive));
-	ClaudeBridge::Get().LogLine(CLAUDE_LOG_TURN, std::string("Claude now plays ") + p.getCivilizationShortDescription() + " at the human's difficulty");
+	ClaudeUpdateSeatLabel();
+	ClaudeBridge::Get().LogLine(CLAUDE_LOG_TURN, ClaudeIdentityLabel() + " now plays " + p.getCivilizationShortDescription() + " at the human's difficulty");
 	return true;
 }
 
@@ -76,9 +77,32 @@ bool ClaudeReleaseSeat(std::string& err)
 	if(GET_PLAYER(e).isTurnActive()) { err = "end your turn first; the seat can be released while another player's turn is running"; return false; }
 	CvPreGame::setSlotStatus(e, SS_COMPUTER);
 	CvPreGame::setNickname(e, CvString(""));
+	CvPreGame::setLeaderName(e, CvString(""));
 	CvPreGame::setHandicap(e, (HandicapTypes)GC.getAI_HANDICAP());
 	ClaudeBridge::Get().LogLine(CLAUDE_LOG_TURN, std::string("The game's AI now plays ") + GET_PLAYER(e).getCivilizationShortDescription());
 	return true;
+}
+
+std::string ClaudeIdentityLabel()
+{
+	ClaudeIdentity id = ClaudeBridge::Get().Identity();
+	std::string label;
+	const std::string* parts[] = { &id.provider, &id.model, &id.version };
+	for(int i = 0; i < 3; ++i)
+	{
+		if(parts[i]->empty()) continue;
+		if(!label.empty()) label += " ";
+		label += *parts[i];
+	}
+	return label;
+}
+
+void ClaudeUpdateSeatLabel()
+{
+	PlayerTypes e = NamedSeat();
+	if(e == NO_PLAYER) return;
+	std::string label = ClaudeIdentityLabel();
+	CvPreGame::setLeaderName(e, CvString(label.empty() ? std::string() : std::string(GET_PLAYER(e).getLeaderInfo().GetDescription()) + " (" + label + ")"));
 }
 
 void ClaudeNoteSeatPopup(PlayerTypes ePlayer, int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text)

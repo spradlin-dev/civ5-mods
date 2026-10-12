@@ -15,6 +15,14 @@ struct ClaudePopup
 	bool read;
 };
 
+// Which model is playing, as it named itself with set_identity, e.g. Claude / Opus / 5.5.
+struct ClaudeIdentity
+{
+	std::string provider;
+	std::string model;
+	std::string version;
+};
+
 // One line of the in-game Claude Log; category is one of the CLAUDE_LOG_ names.
 struct ClaudeLogEntry
 {
@@ -39,6 +47,11 @@ public:
 	// A tool that cannot finish this frame (a unit is still animating) calls this
 	// instead of failing; the bridge runs it again on a later frame, for a few seconds.
 	static void RetryLater();
+
+	// Any thread. Empty until the connected model calls set_identity; every new MCP
+	// session clears it, so a model that reconnects or replaces another names itself again.
+	ClaudeIdentity Identity();
+	void SetIdentity(const ClaudeIdentity& identity);
 
 	// Game thread. Appends to the in-game log, inserting a separator when the turn changed.
 	void LogLine(const char* category, const std::string& text);

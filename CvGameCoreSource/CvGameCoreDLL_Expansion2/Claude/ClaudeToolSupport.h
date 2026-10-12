@@ -41,6 +41,8 @@ namespace ClaudeTool
 	CvUnit* RequireUnit(CvPlayer* me, const JObj& args, std::string& err);
 	bool RequireMoves(CvUnit* u, std::string& err);
 	CvCity* RequireCity(CvPlayer* me, const JObj& args, std::string& err);
+	// False, with err set, until the connected model has called set_identity.
+	bool RequireIdentity(std::string& err);
 	// Only while the turn is open; use for every tool that changes game state.
 	CvPlayer* MeActing(std::string& err);
 
