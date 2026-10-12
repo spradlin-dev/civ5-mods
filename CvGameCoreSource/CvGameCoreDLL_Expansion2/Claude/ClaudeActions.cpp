@@ -5,7 +5,6 @@
 #include "../CvPlayer.h"
 #include "../CvTeam.h"
 #include "../CvCity.h"
-#include "../CvCityCitizens.h"
 #include "../CvUnit.h"
 #include "../CvPlot.h"
 #include "../CvMap.h"
@@ -196,7 +195,8 @@ namespace
 		est["target"] = J(t.unit ? UnitTypeName(t.unit->getUnitType()) : t.city->getName().c_str());
 		est["target_hp"] = J(t.unit ? t.unit->GetCurrHitPoints() : t.city->GetMaxHitPoints() - t.city->getDamage());
 		est["expected_damage_to_target"] = J(dmgToTarget);
-		est["expected_damage_to_you"] = J(dmgToMe);
+		if(u->getDomainType() == DOMAIN_AIR) est["damage_to_you"] = J("not estimated: interceptors and anti-air can still hit the aircraft");
+		else est["expected_damage_to_you"] = J(dmgToMe);
 		return JVal(est);
 	}
 }
@@ -230,7 +230,8 @@ CLAUDE_TOOL(ToolAttack)
 	int hpBefore = u->GetCurrHitPoints();
 	{
 		NetMessageScope scope;
-		if(target.ranged) u->PushMission(CvTypes::getMISSION_RANGE_ATTACK(), x, y, 0, false, true);
+		// Aircraft strike through a move onto the target; the engine rejects them in the range-attack mission.
+		if(target.ranged && u->getDomainType() != DOMAIN_AIR) u->PushMission(CvTypes::getMISSION_RANGE_ATTACK(), x, y, 0, false, true);
 		else u->PushMission(CvTypes::getMISSION_MOVE_TO(), x, y, 0, false, true);
 	}
 	o["attacked"] = J(true);
@@ -267,10 +268,9 @@ CLAUDE_TOOL(ToolCityAttack)
 {
 	CvPlayer* me = MeActing(err);
 	if(!me) return JVal();
-	int iCity = 0, x = 0, y = 0;
-	if(!RequireInt(args, "city_id", iCity, err) || !RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
-	CvCity* c = me->getCity(iCity);
-	if(!c) { err = "no city with that id"; return JVal(); }
+	CvCity* c = RequireCity(me, args, err);
+	int x = 0, y = 0;
+	if(!c || !RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
 	if(!c->CanRangeStrikeNow()) { err = "this city cannot attack this turn"; return JVal(); }
 	if(!c->canRangeStrikeAt(x, y)) { err = "no attackable enemy on that tile within the city's range"; return JVal(); }
 	CvPlot* p = GC.getMap().plot(x, y);
@@ -293,124 +293,6 @@ CLAUDE_TOOL(ToolCityAttack)
 		if(dAfter && !dAfter->isDelayedDeath()) o["target_hp"] = J(dAfter->GetCurrHitPoints());
 		else o["target_destroyed"] = J(true);
 	}
-	return JVal(o);
-}
-
-// ------------------------------------------------------------------ cities
-
-CLAUDE_TOOL(ToolBuy)
-{
-	CvPlayer* me = MeActing(err);
-	if(!me) return JVal();
-	int iCity = 0;
-	if(!RequireInt(args, "city_id", iCity, err)) return JVal();
-	CvCity* c = me->getCity(iCity);
-	if(!c) { err = "no city with that id"; return JVal(); }
-	std::string item = ArgStr(args, "item");
-	UnitTypes eUnit = FindUnitType(item);
-	BuildingTypes eBuilding = (eUnit == NO_UNIT) ? FindBuildingType(item) : NO_BUILDING;
-	if(eUnit == NO_UNIT && eBuilding == NO_BUILDING) { err = "unknown item '" + item + "'; use a UNIT_ or BUILDING_ type from city_options"; return JVal(); }
-	bool bFaith = ArgBool(args, "with_faith", false);
-	YieldTypes eYield = bFaith ? YIELD_FAITH : YIELD_GOLD;
-	int iGoldBefore = me->GetTreasury()->GetGold();
-	int iFaithBefore = me->GetFaith();
-	if(!c->IsCanPurchase(true, true, eUnit, eBuilding, NO_PROJECT, eYield))
-	{
-		err = bFaith ? ClaudeFormat("cannot buy that with faith here now (not available, or not enough faith: you have %d)", iFaithBefore)
-		             : ClaudeFormat("cannot buy that here now (not available, already built, or not enough gold: you have %d)", iGoldBefore);
-		return JVal();
-	}
-	c->Purchase(eUnit, eBuilding, NO_PROJECT, eYield);
-	JObj o;
-	o["ok"] = J(true);
-	if(bFaith) { o["faith_spent"] = J(iFaithBefore - me->GetFaith()); o["faith"] = J(me->GetFaith()); }
-	else { o["gold_spent"] = J(iGoldBefore - me->GetTreasury()->GetGold()); o["gold"] = J(me->GetTreasury()->GetGold()); }
-	return JVal(o);
-}
-
-CLAUDE_TOOL(ToolBuyTile)
-{
-	CvPlayer* me = MeActing(err);
-	if(!me) return JVal();
-	int iCity = 0, x = 0, y = 0;
-	if(!RequireInt(args, "city_id", iCity, err) || !RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
-	CvCity* c = me->getCity(iCity);
-	if(!c) { err = "no city with that id"; return JVal(); }
-	if(!c->CanBuyPlot(x, y)) { err = "that tile cannot be bought by this city now (too far, owned, or not enough gold)"; return JVal(); }
-	int iGoldBefore = me->GetTreasury()->GetGold();
-	c->BuyPlot(x, y);
-	JObj o;
-	o["ok"] = J(true);
-	o["gold_spent"] = J(iGoldBefore - me->GetTreasury()->GetGold());
-	o["gold"] = J(me->GetTreasury()->GetGold());
-	return JVal(o);
-}
-
-CLAUDE_TOOL(ToolSetCityFocus)
-{
-	CvPlayer* me = MeActing(err);
-	if(!me) return JVal();
-	int iCity = 0;
-	if(!RequireInt(args, "city_id", iCity, err)) return JVal();
-	CvCity* c = me->getCity(iCity);
-	if(!c) { err = "no city with that id"; return JVal(); }
-	std::string focus = ArgStr(args, "focus");
-	CityAIFocusTypes e;
-	if(!FindFocus(focus, e)) { err = "unknown focus '" + focus + "'; use one of " + FocusNames(); return JVal(); }
-	CvCityCitizens* pCitizens = c->GetCityCitizens();
-	pCitizens->SetFocusType(e);
-	if(HasArg(args, "avoid_growth")) pCitizens->SetForcedAvoidGrowth(ArgBool(args, "avoid_growth", false));
-	JObj o;
-	o["ok"] = J(true);
-	o["city"] = CityJson(c);
-	return JVal(o);
-}
-
-CLAUDE_TOOL(ToolCityTask)
-{
-	CvPlayer* me = MeActing(err);
-	if(!me) return JVal();
-	int iCity = 0;
-	if(!RequireInt(args, "city_id", iCity, err)) return JVal();
-	CvCity* c = me->getCity(iCity);
-	if(!c) { err = "no city with that id"; return JVal(); }
-	std::string task = ArgStr(args, "task");
-	if(task == "annex")
-	{
-		if(!c->IsPuppet() && !c->IsIgnoreCityForHappiness()) { err = "the city is already yours outright"; return JVal(); }
-		if(me->GetPlayerTraits()->IsNoAnnexing()) { err = "your civilization cannot annex cities"; return JVal(); }
-		c->DoAnnex();
-	}
-	else if(task == "puppet")
-	{
-		if(c->IsPuppet()) { err = "already a puppet"; return JVal(); }
-		if(!c->IsIgnoreCityForHappiness()) { err = "only a city whose fate is still undecided after capture can be made a puppet"; return JVal(); }
-		c->DoCreatePuppet();
-	}
-	else if(task == "raze")
-	{
-		if(!me->canRaze(c)) { err = "this city cannot be razed (capitals and some others never can)"; return JVal(); }
-		me->raze(c);
-	}
-	else if(task == "stop_razing")
-	{
-		if(!c->IsRazing()) { err = "the city is not being razed"; return JVal(); }
-		me->unraze(c);
-	}
-	else if(task == "liberate")
-	{
-		PlayerTypes eOrig = c->getOriginalOwner();
-		if(eOrig == NO_PLAYER || eOrig == me->GetID() || !me->CanLiberatePlayerCity(eOrig)) { err = "this city cannot be liberated (its original owner cannot take it back)"; return JVal(); }
-		me->DoLiberatePlayer(eOrig, c->GetID());
-		JObj done;
-		done["ok"] = J(true);
-		done["liberated_to"] = J(CivName(eOrig));
-		return JVal(done);
-	}
-	else { err = "unknown task '" + task + "'; use annex, puppet, raze, stop_razing or liberate"; return JVal(); }
-	JObj o;
-	o["ok"] = J(true);
-	o["city"] = CityJson(c);
 	return JVal(o);
 }
 

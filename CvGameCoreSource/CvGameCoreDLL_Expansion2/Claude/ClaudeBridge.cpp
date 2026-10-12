@@ -38,9 +38,11 @@ struct ClaudeJob
 	std::string error;
 	bool done;
 	bool abandoned;
+	bool retrying;
+	DWORD firstTryMs;
 	HANDLE event;
 
-	ClaudeJob() : done(false), abandoned(false), event(CreateEvent(NULL, TRUE, FALSE, NULL)) {}
+	ClaudeJob() : done(false), abandoned(false), retrying(false), firstTryMs(0), event(CreateEvent(NULL, TRUE, FALSE, NULL)) {}
 	~ClaudeJob() { CloseHandle(event); }
 };
 
@@ -123,7 +125,7 @@ struct ClaudeBridge::Impl
 	void TryStart();
 	void Shutdown();
 	void UpdateTurnFlags();
-	void RunJob(ClaudeJob* pJob);
+	bool RunJob(ClaudeJob* pJob); // true: run it again on a later frame
 	void LogLine(const std::string& text);
 	void DrainPopups();
 	void ResetForNewGame();
@@ -310,8 +312,16 @@ void ClaudeBridge::Impl::Tick()
 		LeaveCriticalSection(&lock);
 		if(pJob == NULL) break;
 
-		RunJob(pJob);
+		bool bRetry = RunJob(pJob);
 		UpdateTurnFlags();
+		if(bRetry)
+		{
+			// Jobs behind it wait for the retry window; one MCP client sends one call at a time.
+			EnterCriticalSection(&lock);
+			jobs.push_front(pJob);
+			LeaveCriticalSection(&lock);
+			break;
+		}
 
 		EnterCriticalSection(&lock);
 		pJob->done = true;
@@ -391,25 +401,47 @@ void ClaudeBridge::Impl::ResetForNewGame()
 	ClaudeResetDiploRequests();
 }
 
-void ClaudeBridge::Impl::RunJob(ClaudeJob* pJob)
+namespace
+{
+	bool s_retryRequested = false;
+	const DWORD CLAUDE_RETRY_WINDOW_MS = 4000;
+}
+
+void ClaudeBridge::RetryLater() { s_retryRequested = true; }
+
+bool ClaudeBridge::Impl::RunJob(ClaudeJob* pJob)
 {
 	const ClaudeToolDef* pTool = ClaudeFindTool(pJob->tool);
 	if(pTool == NULL)
 	{
 		pJob->error = "unknown tool: " + pJob->tool;
-		return;
+		return false;
 	}
 
 	if(pTool->handler == NULL)
 	{
 		pJob->error = pJob->tool + " runs on the bridge, not the game thread";
-		return;
+		return false;
 	}
-	if(pTool->isAction) LogLine("> " + pJob->tool + " " + picojson::value(pJob->args).serialize());
+	bool bFirstTry = !pJob->retrying;
+	if(pTool->isAction && bFirstTry) LogLine("> " + pJob->tool + " " + picojson::value(pJob->args).serialize());
 	ClaudeCrashSetContext((pJob->tool + " " + picojson::value(pJob->args).serialize()).c_str());
+	s_retryRequested = false;
+	pJob->error.clear();
 	pJob->result = pTool->handler(pJob->args, pJob->error);
 	ClaudeCrashSetContext("");
+	if(s_retryRequested)
+	{
+		DWORD now = GetTickCount();
+		if(bFirstTry)
+		{
+			pJob->retrying = true;
+			pJob->firstTryMs = now;
+		}
+		if(now - pJob->firstTryMs < CLAUDE_RETRY_WINDOW_MS) return true;
+	}
 	if(pTool->isAction && !pJob->error.empty()) LogLine("  => ERROR: " + pJob->error);
+	return false;
 }
 
 void ClaudeBridge::Impl::LogLine(const std::string& text)

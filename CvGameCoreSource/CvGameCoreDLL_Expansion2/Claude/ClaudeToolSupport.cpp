@@ -190,6 +190,33 @@ namespace ClaudeTool
 		}
 		return NO_BUILDING;
 	}
+	CityItem FindCityItem(const CvPlayer* me, const std::string& key)
+	{
+		CityItem r;
+		r.eUnit = FindUnitType(key);
+		r.eBuilding = NO_BUILDING;
+		if(r.eUnit != NO_UNIT)
+		{
+			UnitTypes eOwn = (UnitTypes)me->getCivilizationInfo().getCivilizationUnits(GC.getUnitInfo(r.eUnit)->GetUnitClassType());
+			if(eOwn != NO_UNIT && eOwn != r.eUnit)
+			{
+				r.substituted = std::string(GC.getUnitInfo(eOwn)->GetType()) + " is your civilization's version of " + GC.getUnitInfo(r.eUnit)->GetType();
+				r.eUnit = eOwn;
+			}
+			return r;
+		}
+		r.eBuilding = FindBuildingType(key);
+		if(r.eBuilding != NO_BUILDING)
+		{
+			BuildingTypes eOwn = (BuildingTypes)me->getCivilizationInfo().getCivilizationBuildings(GC.getBuildingInfo(r.eBuilding)->GetBuildingClassType());
+			if(eOwn != NO_BUILDING && eOwn != r.eBuilding)
+			{
+				r.substituted = std::string(GC.getBuildingInfo(eOwn)->GetType()) + " is your civilization's version of " + GC.getBuildingInfo(r.eBuilding)->GetType();
+				r.eBuilding = eOwn;
+			}
+		}
+		return r;
+	}
 	TechTypes FindTechType(const std::string& key)
 	{
 		for(int i = 0; i < GC.getNumTechInfos(); ++i)
@@ -278,6 +305,15 @@ namespace ClaudeTool
 		CvUnit* u = me->getUnit(iUnit);
 		if(!u) err = "no unit with that id";
 		return u;
+	}
+
+	CvCity* RequireCity(CvPlayer* me, const JObj& args, std::string& err)
+	{
+		int iCity = 0;
+		if(!RequireInt(args, "city_id", iCity, err)) return NULL;
+		CvCity* c = me->getCity(iCity);
+		if(!c) err = "no city with that id";
+		return c;
 	}
 
 	PlayerTypes FindPlayer(const std::string& key)

@@ -29,6 +29,9 @@ public:
 	// Game thread. Stops serving and joins the HTTP thread. Called from the DLL's
 	// own teardown; static destruction is too late (see the implementation).
 	void Shutdown();
+	// A tool that cannot finish this frame (a unit is still animating) calls this
+	// instead of failing; the bridge runs it again on a later frame, for a few seconds.
+	static void RetryLater();
 
 	// Game thread. Appends to the in-game log, inserting a separator when the turn changed.
 	void LogLine(const std::string& text);

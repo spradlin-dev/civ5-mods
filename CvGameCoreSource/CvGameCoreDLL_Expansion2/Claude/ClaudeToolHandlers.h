@@ -42,6 +42,9 @@ CLAUDE_TOOL(ToolCityAttack);
 CLAUDE_TOOL(ToolBuy);
 CLAUDE_TOOL(ToolBuyTile);
 CLAUDE_TOOL(ToolSetCityFocus);
+CLAUDE_TOOL(ToolCityCitizens);
+CLAUDE_TOOL(ToolCityWorkTile);
+CLAUDE_TOOL(ToolCitySpecialist);
 CLAUDE_TOOL(ToolDeclareWar);
 CLAUDE_TOOL(ToolCityTask);
 

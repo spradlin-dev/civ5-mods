@@ -32,13 +32,34 @@ const char* ClaudePopupDialogToClose(int iType)
 	}
 }
 
+namespace
+{
+	// The engine's reward text is empty for rewards whose description needs a number filled in.
+	// iAmount is the popup's one granted number (gold, else culture, else faith), as the engine's own popup carries it.
+	std::string GoodySummary(int iGoody, int iAmount)
+	{
+		Database::SingleResult kResult;
+		if(iGoody < 0 || !DB.SelectAt(kResult, "GoodyHuts", iGoody)) return "a reward";
+		CvGoodyInfo k;
+		k.CacheResult(kResult);
+		std::string s = k.GetType();
+		if(s.compare(0, 6, "GOODY_") == 0) s = s.substr(6);
+		for(size_t i = 0; i < s.size(); ++i) s[i] = (s[i] == '_') ? ' ' : (char)tolower((unsigned char)s[i]);
+		if(iAmount > 0 && k.getCulture() > 0) s += ClaudeFormat(" (+%d culture)", iAmount);
+		else if(iAmount > 0 && (k.getFaith() > 0 || k.isPantheonFaith() || k.getProphetPercent() > 0)) s += ClaudeFormat(" (+%d faith)", iAmount);
+		if(k.getPopulation() > 0) s += ClaudeFormat(" (+%d population)", k.getPopulation());
+		if(k.getExperience() > 0) s += ClaudeFormat(" (+%d experience)", k.getExperience());
+		return s;
+	}
+}
+
 std::string ClaudeDescribePopup(int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text)
 {
 	if(iType == CLAUDE_POPUP_TEXT) return text;
 	switch(iType)
 	{
 	case BUTTONPOPUP_GOODY_HUT_REWARD:
-		return text.empty() ? std::string("Ancient ruins explored") : "Ancient ruins explored: " + text;
+		return "Ancient ruins explored: " + (text.empty() ? GoodySummary(iData1, iData2) : text);
 	case BUTTONPOPUP_TECH_AWARD:
 	{
 		CvTechEntry* t = (iData3 >= 0) ? GC.getTechInfo((TechTypes)iData3) : NULL;

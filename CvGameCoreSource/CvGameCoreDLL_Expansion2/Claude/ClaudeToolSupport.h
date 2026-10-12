@@ -39,6 +39,7 @@ namespace ClaudeTool
 	// True when key names the entry by its type string or its displayed name.
 	bool MatchesKey(const char* szType, const char* szDescription, const std::string& key);
 	CvUnit* RequireUnit(CvPlayer* me, const JObj& args, std::string& err);
+	CvCity* RequireCity(CvPlayer* me, const JObj& args, std::string& err);
 	// Only while the turn is open; use for every tool that changes game state.
 	CvPlayer* MeActing(std::string& err);
 
@@ -72,6 +73,15 @@ namespace ClaudeTool
 
 	UnitTypes FindUnitType(const std::string& key);
 	BuildingTypes FindBuildingType(const std::string& key);
+	// A unit or building a city can make, swapped for this civilization's unique
+	// version when it has one; substituted says so when that happened.
+	struct CityItem
+	{
+		UnitTypes eUnit;
+		BuildingTypes eBuilding;
+		std::string substituted;
+	};
+	CityItem FindCityItem(const CvPlayer* me, const std::string& key);
 	TechTypes FindTechType(const std::string& key);
 	BuildTypes FindBuildType(const std::string& key);
 	PromotionTypes FindPromotionType(const std::string& key);

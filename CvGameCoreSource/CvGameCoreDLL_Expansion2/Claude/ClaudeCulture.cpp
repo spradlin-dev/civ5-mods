@@ -274,6 +274,58 @@ CLAUDE_TOOL(ToolMoveGreatWork)
 	return JVal(o);
 }
 
+namespace
+{
+	// The same numbers the game's route chooser shows: what each end earns per turn.
+	JVal RoutePreview(CvPlayer* me, CvCity* origin, CvCity* dest, DomainTypes eDomain, TradeConnectionType eType)
+	{
+		TradeConnection k;
+		k.m_iID = -1;
+		k.m_iOriginX = origin->getX();
+		k.m_iOriginY = origin->getY();
+		k.m_iDestX = dest->getX();
+		k.m_iDestY = dest->getY();
+		k.m_eOriginOwner = origin->getOwner();
+		k.m_eDestOwner = dest->getOwner();
+		k.m_eDomain = eDomain;
+		k.m_eConnectionType = eType;
+		k.m_iTradeUnitLocationIndex = -1;
+		k.m_bTradeUnitMovingForward = true;
+		k.m_unitID = -1;
+		k.m_iCircuitsCompleted = 0;
+		k.m_iCircuitsToComplete = 0;
+		k.m_iTurnRouteComplete = 0;
+		for(int i = 0; i < NUM_YIELD_TYPES; ++i) k.m_aiOriginYields[i] = k.m_aiDestYields[i] = 0;
+		CvPlayerTrade* mine = me->GetTrade();
+		CvPlayerTrade* theirs = GET_PLAYER(dest->getOwner()).GetTrade();
+		JObj o;
+		if(eType == TRADE_CONNECTION_INTERNATIONAL)
+		{
+			JObj you, them;
+			you["gold"] = J(mine->GetTradeConnectionValueTimes100(k, YIELD_GOLD, true) / 100.0);
+			you["science"] = J(mine->GetTradeConnectionValueTimes100(k, YIELD_SCIENCE, true) / 100.0);
+			them["gold"] = J(theirs->GetTradeConnectionValueTimes100(k, YIELD_GOLD, false) / 100.0);
+			them["science"] = J(theirs->GetTradeConnectionValueTimes100(k, YIELD_SCIENCE, false) / 100.0);
+			o["for_you"] = JVal(you);
+			o["for_them"] = JVal(them);
+		}
+		else
+		{
+			JObj city;
+			city["food"] = J(theirs->GetTradeConnectionValueTimes100(k, YIELD_FOOD, false) / 100.0);
+			city["production"] = J(theirs->GetTradeConnectionValueTimes100(k, YIELD_PRODUCTION, false) / 100.0);
+			o["for_destination_city"] = JVal(city);
+		}
+		ReligionTypes eToReligion = NO_RELIGION, eFromReligion = NO_RELIGION;
+		int iTo = 0, iFrom = 0;
+		origin->GetCityReligions()->WouldExertTradeRoutePressureToward(dest, eToReligion, iTo);
+		dest->GetCityReligions()->WouldExertTradeRoutePressureToward(origin, eFromReligion, iFrom);
+		if(eToReligion != NO_RELIGION) o["spreads_your_religion_pressure"] = J(iTo / GC.getRELIGION_MISSIONARY_PRESSURE_MULTIPLIER());
+		if(eFromReligion != NO_RELIGION) o["brings_their_religion_pressure"] = J(iFrom / GC.getRELIGION_MISSIONARY_PRESSURE_MULTIPLIER());
+		return JVal(o);
+	}
+}
+
 CLAUDE_TOOL(ToolTradeRouteOptions)
 {
 	CvPlayer* me = Me(err);
@@ -308,6 +360,7 @@ CLAUDE_TOOL(ToolTradeRouteOptions)
 				d["y"] = J(c->getY());
 				d["type"] = J(CONNECTIONS[t].name);
 				d["distance"] = J(plotDistance(p->getX(), p->getY(), c->getX(), c->getY()));
+				d["per_turn"] = RoutePreview(me, origin, c, u->getDomainType(), CONNECTIONS[t].type);
 				dests.push_back(JVal(d));
 			}
 		}

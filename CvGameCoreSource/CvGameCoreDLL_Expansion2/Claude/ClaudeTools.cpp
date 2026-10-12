@@ -190,10 +190,8 @@ CLAUDE_TOOL(ToolCityOptions)
 {
 	CvPlayer* me = Me(err);
 	if(!me) return JVal();
-	int iCity = 0;
-	if(!RequireInt(args, "city_id", iCity, err)) return JVal();
-	CvCity* c = me->getCity(iCity);
-	if(!c) { err = "no city with that id"; return JVal(); }
+	CvCity* c = RequireCity(me, args, err);
+	if(!c) return JVal();
 	JObj o;
 	o["city"] = CityJson(c);
 	o["gold"] = J(me->GetTreasury()->GetGold());
@@ -439,6 +437,51 @@ CLAUDE_TOOL(ToolUnitAction)
 		o["unit"] = UnitJson(u);
 		return JVal(o);
 	}
+	if(action == "air_sweep")
+	{
+		int x = 0, y = 0;
+		if(!RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
+		if(!u->canAirSweepAt(x, y)) { err = "this unit cannot sweep that tile (not a fighter, out of range, or no moves left)"; return JVal(); }
+		NetMessageScope scope;
+		u->PushMission(CvTypes::getMISSION_AIR_SWEEP(), x, y);
+		o["ok"] = J(true);
+		o["unit"] = UnitJson(u);
+		return JVal(o);
+	}
+	if(action == "paradrop")
+	{
+		int x = 0, y = 0;
+		if(!RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
+		if(!u->canParadropAt(p, x, y)) { err = "this unit cannot drop there (not a paratrooper, must start in your territory, target within range and not enemy-held)"; return JVal(); }
+		NetMessageScope scope;
+		u->PushMission(CvTypes::getMISSION_PARADROP(), x, y);
+		o["ok"] = J(true);
+		o["unit"] = UnitJson(u);
+		return JVal(o);
+	}
+	if(action == "nuke")
+	{
+		int x = 0, y = 0;
+		if(!RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
+		if(!u->canNukeAt(p, x, y)) { err = "this unit cannot strike that tile (not a nuclear weapon, out of range, or the blast would hit someone you cannot declare war on)"; return JVal(); }
+		CvPlot* pTarget = GC.getMap().plot(x, y);
+		if(!pTarget) { err = "that tile is off the map"; return JVal(); }
+		CvTeam& myTeam = GET_TEAM(me->getTeam());
+		for(int i = 0; i < MAX_TEAMS; ++i)
+		{
+			TeamTypes eTeam = (TeamTypes)i;
+			if(u->isNukeVictim(pTarget, eTeam) && !myTeam.isAtWar(eTeam))
+			{
+				err = "the blast would hit " + CivName(GET_TEAM(eTeam).getLeaderID()) + ", who you are not at war with; declare war first if you mean to";
+				return JVal();
+			}
+		}
+		NetMessageScope scope;
+		u->PushMission(CvTypes::getMISSION_NUKE(), x, y);
+		o["ok"] = J(true);
+		o["unit"] = UnitJson(u);
+		return JVal(o);
+	}
 	if(action == "disband")
 	{
 		if(!u->canScrap()) { err = "this unit cannot be disbanded right now"; return JVal(); }
@@ -456,6 +499,7 @@ CLAUDE_TOOL(ToolUnitAction)
 		const UnitActionDef& def = defs[i];
 		if(action != def.name) continue;
 		if(!def.can(u, p)) { err = def.refusal; return JVal(); }
+		if(action == "found_city" && !u->canMove()) { err = "the settler has no moves left this turn; found the city next turn"; return JVal(); }
 		{
 			NetMessageScope scope;
 			u->PushMission(def.mission());
@@ -473,7 +517,7 @@ CLAUDE_TOOL(ToolUnitAction)
 		return JVal(o);
 	}
 
-	err = "unknown action '" + action + "'; use one of " + UnitActionNames() + ", build, rebase or disband";
+	err = "unknown action '" + action + "'; use one of " + UnitActionNames() + ", build, rebase, air_sweep, paradrop, nuke or disband";
 	return JVal();
 }
 
@@ -481,26 +525,25 @@ CLAUDE_TOOL(ToolSetProduction)
 {
 	CvPlayer* me = MeActing(err);
 	if(!me) return JVal();
-	int iCity = 0;
-	if(!RequireInt(args, "city_id", iCity, err)) return JVal();
-	CvCity* c = me->getCity(iCity);
-	if(!c) { err = "no city with that id"; return JVal(); }
+	CvCity* c = RequireCity(me, args, err);
+	if(!c) return JVal();
 	std::string item = ArgStr(args, "item");
 	bool bAppend = ArgBool(args, "append", false);
 
-	UnitTypes eUnit = FindUnitType(item);
-	BuildingTypes eBuilding = (eUnit == NO_UNIT) ? FindBuildingType(item) : NO_BUILDING;
+	CityItem found = FindCityItem(me, item);
+	UnitTypes eUnit = found.eUnit;
+	BuildingTypes eBuilding = found.eBuilding;
 	ProjectTypes eProject = (eUnit == NO_UNIT && eBuilding == NO_BUILDING) ? FindProjectType(item) : NO_PROJECT;
 	if(eUnit != NO_UNIT)
 	{
 		CvString why;
-		if(!c->canTrain(eUnit, false, false, false, false, &why)) { err = "this city cannot train " + item + " right now: " + std::string(why.c_str()); return JVal(); }
+		if(!c->canTrain(eUnit, false, false, false, false, &why)) { err = "this city cannot train " + std::string(GC.getUnitInfo(eUnit)->GetType()) + " right now: " + std::string(why.c_str()); return JVal(); }
 		c->pushOrder(ORDER_TRAIN, eUnit, -1, false, !bAppend, bAppend);
 	}
 	else if(eBuilding != NO_BUILDING)
 	{
 		CvString why;
-		if(!c->canConstruct(eBuilding, false, false, false, &why)) { err = "this city cannot build " + item + " right now: " + std::string(why.c_str()); return JVal(); }
+		if(!c->canConstruct(eBuilding, false, false, false, &why)) { err = "this city cannot build " + std::string(GC.getBuildingInfo(eBuilding)->GetType()) + " right now: " + std::string(why.c_str()); return JVal(); }
 		c->pushOrder(ORDER_CONSTRUCT, eBuilding, -1, false, !bAppend, bAppend);
 	}
 	else if(eProject != NO_PROJECT)
@@ -515,6 +558,7 @@ CLAUDE_TOOL(ToolSetProduction)
 	}
 	JObj o;
 	o["ok"] = J(true);
+	if(!found.substituted.empty()) o["substituted"] = J(found.substituted);
 	o["city"] = CityJson(c);
 	return JVal(o);
 }
@@ -574,7 +618,13 @@ CLAUDE_TOOL(ToolEndTurn)
 	else
 	{
 		me->setEndTurn(true);
-		if(!me->isEndTurn()) { err = "a unit or city is still busy; call end_turn again in a moment"; return JVal(); }
+		if(!me->isEndTurn())
+		{
+			if(me->hasReadyUnit()) { err = "a unit still needs orders; see units"; return JVal(); }
+			err = "a unit or city stayed busy for several seconds; call end_turn again";
+			ClaudeBridge::RetryLater();
+			return JVal();
+		}
 	}
 	JObj o;
 	o["ok"] = J(true);
@@ -701,7 +751,7 @@ namespace
 		  "Everything one city can build or buy right now: units, buildings and projects with production cost and turns, gold and faith prices, and the tiles it can buy. Use the type strings with set_production or buy.",
 		  SCHEMA_CITY, ToolCityOptions, false, false },
 		{ "map",
-		  "Explored tiles within radius (default 3, max 8) of a point (default: your capital). Hex grid with offset rows: odd rows sit half a tile east of even rows, so use the dist field rather than computing distances. Unexplored tiles are counted, not listed. Only visible_now tiles show units.",
+		  "Explored tiles within radius (default 3, max 8) of a point (default: your capital). Hex grid with offset rows: odd rows sit half a tile east of even rows, so use the dist field rather than computing distances. Unexplored tiles are counted, not listed. Only visible_now tiles show units. Compass: y increases NORTHWARD (y=0 is the south edge) and x increases eastward.",
 		  "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"integer\"},\"y\":{\"type\":\"integer\"},\"radius\":{\"type\":\"integer\"}}}", ToolMap, false, false },
 		{ "research_options",
 		  "Technologies you can research now, with cost, turns and what they give.",
@@ -719,7 +769,7 @@ namespace
 		  "Order a unit to move to a tile. Multi-turn moves continue when you end each turn (the unit is still in place when your next turn opens); do not re-issue them. Fails with a reason if there is no path. To attack, use attack.",
 		  SCHEMA_UNIT_XY, ToolMoveUnit, true, false },
 		{ "unit_action",
-		  "Give a unit an order on its current tile. action is one of the names unit_options lists under actions, build (with build=BUILD_... from builds_here), rebase (aircraft, with x and y of one of your cities or carriers), or disband.",
+		  "Give a unit an order on its current tile. action is one of the names unit_options lists under actions, build (with build=BUILD_... from builds_here), rebase (aircraft, with x and y of one of your cities or carriers), air_sweep (fighters, x and y of the tile to clear of interceptors), paradrop (paratroopers, x and y of the landing tile), nuke (atomic bombs and nuclear missiles, x and y of the target), or disband. Aircraft bomb with the attack tool.",
 		  "{\"type\":\"object\",\"properties\":{\"unit_id\":{\"type\":\"integer\"},\"action\":{\"type\":\"string\"},\"build\":{\"type\":\"string\"},\"x\":{\"type\":\"integer\"},\"y\":{\"type\":\"integer\"}},\"required\":[\"unit_id\",\"action\"]}", ToolUnitAction, true, false },
 		{ "attack",
 		  "Attack the enemy unit or city on a tile with one of your units (melee needs to be adjacent; ranged units strike from range). Returns the game's own damage estimate; pass preview_only=true to see the estimate without attacking.",
@@ -745,6 +795,15 @@ namespace
 		{ "set_city_focus",
 		  "Set how a city assigns its citizens (focus names as shown in cities.focus; an unknown name lists them). Optional avoid_growth=true/false.",
 		  "{\"type\":\"object\",\"properties\":{\"city_id\":{\"type\":\"integer\"},\"focus\":{\"type\":\"string\"},\"avoid_growth\":{\"type\":\"boolean\"}},\"required\":[\"city_id\",\"focus\"]}", ToolSetCityFocus, true, false },
+		{ "city_citizens",
+		  "What every citizen of a city does: worked tiles (locked ones are your choice), tiles it could work instead, specialists per building, and unemployed citizens.",
+		  "{\"type\":\"object\",\"properties\":{\"city_id\":{\"type\":\"integer\"}},\"required\":[\"city_id\"]}", ToolCityCitizens, false, false },
+		{ "city_work_tile",
+		  "Lock a tile so the city works it, or free a locked or worked tile (the citizen becomes unemployed until reassigned), exactly like clicking the tile in the city screen. A tile another of your cities works is moved to this city first. The city's own tile resets every tile and specialist to automatic.",
+		  SCHEMA_CITY_XY, ToolCityWorkTile, true, false },
+		{ "city_specialist",
+		  "Put a citizen to work as a specialist in a building (type from city_citizens.specialists), or take one out with remove=true.",
+		  "{\"type\":\"object\",\"properties\":{\"city_id\":{\"type\":\"integer\"},\"building\":{\"type\":\"string\"},\"remove\":{\"type\":\"boolean\"}},\"required\":[\"city_id\",\"building\"]}", ToolCitySpecialist, true, false },
 		{ "set_research",
 		  "Choose the technology to research (type string from research_options, e.g. TECH_POTTERY). When you have a free technology to claim, this grants it immediately instead.",
 		  "{\"type\":\"object\",\"properties\":{\"tech\":{\"type\":\"string\"}},\"required\":[\"tech\"]}", ToolSetResearch, true, false },

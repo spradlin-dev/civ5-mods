@@ -6436,7 +6436,7 @@ void CvPlayer::receiveGoody(CvPlot* pPlot, GoodyTypes eGoody, CvUnit* pUnit)
 	{
 		GC.GetEngineUserInterface()->AddPlotMessage(0, pPlot->GetPlotIndex(), GetID(), true, GC.getEVENT_MESSAGE_TIME(), strBuffer);
 	}
-	ClaudeNoteSeatPopup(GetID(), BUTTONPOPUP_GOODY_HUT_REWARD, eGoody, 0, 0, false, strBuffer.c_str());
+	ClaudeNoteSeatPopup(GetID(), BUTTONPOPUP_GOODY_HUT_REWARD, eGoody, iGold > 0 ? iGold : (iCulture > 0 ? iCulture : iFaith), 0, false, strBuffer.c_str());
 
 	// If it's the active player then show the popup
 	if(GetID() == GC.getGame().getActivePlayer())
