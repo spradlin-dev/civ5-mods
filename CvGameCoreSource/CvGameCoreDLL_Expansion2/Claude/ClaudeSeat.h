@@ -16,6 +16,11 @@ bool ClaudeSeatOnScreen();
 bool ClaudeClaimSeat(PlayerTypes ePlayer, std::string& err);
 bool ClaudeReleaseSeat(std::string& err);
 
+// Game thread. A UUID naming this game across reloads and connections, so a model can keep
+// memories per game. Kept in the saved game name, which only multiplayer lobbies show;
+// a game without one gets one when it starts or loads, and keeps it once saved.
+std::string ClaudeGameId();
+
 // The connected model's name, e.g. "Claude Opus 5.5"; "" until it has named itself.
 std::string ClaudeIdentityLabel();
 // Game thread. Shows that name after the claimed seat's leader, e.g. "Dido (Claude Opus 5.5)",

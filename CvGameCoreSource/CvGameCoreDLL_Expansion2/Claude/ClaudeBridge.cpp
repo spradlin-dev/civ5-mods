@@ -428,6 +428,7 @@ void ClaudeBridge::Impl::ResetForNewGame()
 	testingMode = false;
 	LeaveCriticalSection(&lock);
 	labelledIdentityVersion = -1; // a loaded save carries the label of whichever model played it
+	ClaudeGameId();
 	ClaudeResetDiploRequests();
 }
 
@@ -601,6 +602,9 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bo
 		    "use the query tools, act, write your reasoning with log, and finish with end_turn and a short summary of what you did. "
 		    "A unit with a queued multi-turn move is still where it stopped when your next turn opens; it moves when you call end_turn, "
 		    "as for a human clicking End Turn. Leave it alone unless you want it to go somewhere else. "
+		    "status.game_id names this game across reloads and reconnections: keep your memories about this game "
+		    "(your role, plans, what you learned about the other players) under that id, keep lessons for every game separate, "
+		    "and when you connect, look up your memories for this game_id before you play. "
 		    "Right after naming yourself, call status and tell the human in your reply who you are and what you play: "
 		    "their own civilization, a teammate (name it), or an opponent (never name it; they will see you once they meet you). "
 		    "If no seat is claimed and the human has not told you your role, ask them first and offer the choices: "

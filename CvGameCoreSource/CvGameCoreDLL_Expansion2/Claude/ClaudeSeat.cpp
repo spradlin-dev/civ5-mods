@@ -1,4 +1,7 @@
 #include "CvGameCoreDLLPCH.h"
+#pragma comment(lib, "ole32.lib")
+// From objbase.h, which does not compile under the precompiled header's trimmed Windows headers.
+extern "C" __declspec(dllimport) HRESULT __stdcall CoCreateGuid(GUID* pguid);
 #include "ClaudeSeat.h"
 #include "ClaudeBridge.h"
 #include "ClaudeLogText.h"
@@ -9,6 +12,7 @@
 namespace
 {
 	const char* SEAT_NAME = "Claude";
+	const char* GAME_ID_PREFIX = "civ5-game-";
 
 	bool NameIsSeat(const CvString& name)
 	{
@@ -99,6 +103,19 @@ bool ClaudeLogVisibleOnScreen()
 {
 	PlayerTypes eSeat = ClaudeSeat();
 	return eSeat == NO_PLAYER || ClaudeOnScreenTeam(eSeat);
+}
+
+std::string ClaudeGameId()
+{
+	std::string name = CvPreGame::gameName().c_str();
+	if(name.compare(0, strlen(GAME_ID_PREFIX), GAME_ID_PREFIX) == 0) return name;
+	GUID g;
+	if(FAILED(CoCreateGuid(&g))) return "";
+	char id[64];
+	_snprintf_s(id, sizeof(id), _TRUNCATE, "%s%08lx-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x", GAME_ID_PREFIX,
+	            g.Data1, g.Data2, g.Data3, g.Data4[0], g.Data4[1], g.Data4[2], g.Data4[3], g.Data4[4], g.Data4[5], g.Data4[6], g.Data4[7]);
+	CvPreGame::setGameName(CvString(id));
+	return id;
 }
 
 std::string ClaudeIdentityLabel()

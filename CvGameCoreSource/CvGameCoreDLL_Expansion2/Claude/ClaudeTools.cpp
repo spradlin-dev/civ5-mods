@@ -46,6 +46,7 @@ CLAUDE_TOOL(ToolStatus)
 	if(!me) return JVal();
 	CvGame& g = GC.getGame();
 	JObj o;
+	o["game_id"] = J(ClaudeGameId());
 	o["turn"] = J(g.getGameTurn());
 	o["year"] = J(g.getGameTurnYear());
 	o["max_turns"] = J(g.getMaxTurns());
