@@ -27,7 +27,7 @@ Other clients: add an HTTP MCP server at http://127.0.0.1:7676/mcp.
 
 [h2]Good to know[/h2]
 [list]
-[*]The AI can only connect while a game is loaded.
+[*]The AI can only connect while a game is loaded (meaning the world map is up).
 [*]The server only listens on your own PC. Nothing in the game is reachable from the internet.
 [*]Saves keep the AI's civilization. After loading a save, start your client again and it picks up where it left off.
 [*]While the AI takes its turn, you can't act or save until it ends its turn.
