@@ -1,6 +1,6 @@
 # Plan: rankings tool
 
-Not started. Gives the AI player the same "where do I stand" picture a human player of its civilization would have, and nothing more.
+Built on 2026-10-12 (commit 5ba4fbc), as described below. Gives the AI player the same "where do I stand" picture a human player of its civilization would have, and nothing more.
 
 ## Rule
 
