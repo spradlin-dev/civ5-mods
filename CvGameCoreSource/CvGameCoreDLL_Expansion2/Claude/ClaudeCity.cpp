@@ -18,6 +18,32 @@ using namespace ClaudeTool;
 
 // ------------------------------------------------------------------ cities
 
+namespace
+{
+	// Why the city refused a purchase, checked in the order CvCity::IsCanPurchase checks.
+	std::string PurchaseRefusal(CvPlayer* me, CvCity* c, UnitTypes eUnit, BuildingTypes eBuilding, bool bFaith)
+	{
+		if(c->IsPuppet() && !me->GetPlayerTraits()->IsNoAnnexing()) return "puppet cities cannot buy anything";
+		if(c->IsResistance() || c->IsRazing()) return "the city is in resistance or being razed";
+		if(eUnit != NO_UNIT && !c->CanPlaceUnitHere(eUnit))
+			return "another unit of the same kind already stands on the city tile; move it out first (a city tile holds one military and one civilian unit)";
+		CvString why;
+		if(eUnit != NO_UNIT && !c->canTrain(eUnit, false, false, false, true, &why))
+			return "the city cannot train it" + (why.IsEmpty() ? std::string() : ": " + std::string(why.c_str()));
+		if(eBuilding != NO_BUILDING && !c->canConstruct(eBuilding, false, false, false, &why))
+			return "the city cannot build it" + (why.IsEmpty() ? std::string() : ": " + std::string(why.c_str()));
+		if(bFaith)
+		{
+			int iCost = (eUnit != NO_UNIT) ? c->GetFaithPurchaseCost(eUnit, true) : c->GetFaithPurchaseCost(eBuilding);
+			if(iCost < 1) return "it cannot be bought with faith here (it needs the right belief, or the city's majority religion)";
+			return ClaudeFormat("it costs %d faith and you have %d, or it needs the city to follow your religion", iCost, me->GetFaith());
+		}
+		int iCost = (eUnit != NO_UNIT) ? c->GetPurchaseCost(eUnit) : c->GetPurchaseCost(eBuilding);
+		if(iCost < 0) return "it cannot be bought with gold";
+		return ClaudeFormat("it costs %d gold and you have %d", iCost, me->GetTreasury()->GetGold());
+	}
+}
+
 CLAUDE_TOOL(ToolBuy)
 {
 	CvPlayer* me = MeActing(err);
@@ -35,8 +61,7 @@ CLAUDE_TOOL(ToolBuy)
 	int iFaithBefore = me->GetFaith();
 	if(!c->IsCanPurchase(true, true, eUnit, eBuilding, NO_PROJECT, eYield))
 	{
-		err = bFaith ? ClaudeFormat("cannot buy that with faith here now (not available, or not enough faith: you have %d)", iFaithBefore)
-		             : ClaudeFormat("cannot buy that here now (not available, already built, or not enough gold: you have %d)", iGoldBefore);
+		err = "cannot buy that here now: " + PurchaseRefusal(me, c, eUnit, eBuilding, bFaith);
 		if(!found.substituted.empty()) err += "; " + found.substituted;
 		return JVal();
 	}
