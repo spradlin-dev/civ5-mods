@@ -117,13 +117,60 @@ CLAUDE_TOOL(ToolMods)
 	return JVal(o);
 }
 
+namespace
+{
+	JArr SeatsWaiting()
+	{
+		JArr list;
+		std::string label = ClaudeCurrentLabel();
+		std::vector<PlayerTypes> waiting = ClaudeUnboundSeats();
+		for(size_t i = 0; i < waiting.size(); ++i) list.push_back(J(ClaudeSeatWaitingText(waiting[i], label)));
+		return list;
+	}
+
+	// The other connected models, by name and relation only: which civilization each plays is
+	// not something a player would know.
+	JArr OtherAiPlayers(CvPlayer* me)
+	{
+		JArr list;
+		ClaudeSession mine = ClaudeBridge::Get().Current();
+		std::vector<ClaudeSession> all = ClaudeBridge::Get().Sessions();
+		for(size_t i = 0; i < all.size(); ++i)
+		{
+			if(all[i].token == mine.token || all[i].idle) continue;
+			std::string label = ClaudeIdentityLabel(all[i].identity);
+			if(label.empty()) continue;
+			std::string relation;
+			if(all[i].seat == CLAUDE_SEAT_SCREEN) relation = "plays the human's own civilization";
+			else if(all[i].seat < 0) relation = "between seats";
+			else if(me) relation = (GET_PLAYER((PlayerTypes)all[i].seat).getTeam() == me->getTeam()) ? "your teammate" : "your opponent";
+			else relation = ClaudeOnScreenTeam((PlayerTypes)all[i].seat) ? "the human's teammate" : "the human's opponent";
+			list.push_back(J(label + " (" + relation + ")"));
+		}
+		return list;
+	}
+}
+
 CLAUDE_TOOL(ToolStatus)
 {
-	CvPlayer* me = Me(err);
-	if(!me) return JVal();
 	CvGame& g = GC.getGame();
 	JObj o;
 	o["game_id"] = J(ClaudeGameId());
+	int iSeatState = ClaudeBridge::Get().Current().seat;
+	if(iSeatState == CLAUDE_SEAT_LOST || iSeatState == CLAUDE_SEAT_UNDECIDED)
+	{
+		o["seat"] = J(iSeatState == CLAUDE_SEAT_LOST
+		              ? "lost: the game was reloaded or your civilization was released; take_seat claims one again (the civilization you remember for this game_id, or one from seats_waiting_for_a_player)"
+		              : "none yet: this game has AI seats, so choose with take_seat: a civilization name, teammate, opponent, or human to play the civilization on screen");
+		o["seats_waiting_for_a_player"] = JVal(SeatsWaiting());
+		JArr others = OtherAiPlayers(NULL);
+		if(!others.empty()) o["other_ai_players"] = JVal(others);
+		std::string label = ClaudeCurrentLabel();
+		o["playing_as"] = J(label.empty() ? std::string("nobody yet: call set_identity before acting") : label);
+		return JVal(o);
+	}
+	CvPlayer* me = Me(err);
+	if(!me) return JVal();
 	JArr mods;
 	std::vector<ClaudeModInfo> active = ClaudeBridge::Get().ActiveMods();
 	for(size_t i = 0; i < active.size(); ++i) mods.push_back(J(active[i].name));
@@ -157,7 +204,11 @@ CLAUDE_TOOL(ToolStatus)
 		o["seat"] = J("claimed: off screen, the human on screen plays another civilization");
 		o["role"] = J(!ClaudeOnScreenTeam(me->GetID()) ? "opponent: never tell the human which civilization you play" : "teammate of the human");
 	}
-	std::string label = ClaudeIdentityLabel();
+	JArr seatsWaiting = SeatsWaiting();
+	if(!seatsWaiting.empty()) o["seats_waiting_for_a_player"] = JVal(seatsWaiting);
+	JArr others = OtherAiPlayers(me);
+	if(!others.empty()) o["other_ai_players"] = JVal(others);
+	std::string label = ClaudeCurrentLabel();
 	o["playing_as"] = J(label.empty() ? std::string("nobody yet: call set_identity before acting") : label);
 	// Mods arrive from the UI a moment after the map loads; hold the briefing until they have.
 	if(!ClaudeBridge::Get().ActiveMods().empty() && ClaudeBridge::Get().TakeGameBriefingDue())
@@ -783,10 +834,10 @@ CLAUDE_TOOL(ToolAcknowledgeMessages)
 			ids.push_back(id);
 		}
 	}
-	int n = ClaudeBridge::Get().Acknowledge(ids.empty() ? NULL : &ids);
+	int n = ClaudeBridge::Get().Acknowledge(me->GetID(), ids.empty() ? NULL : &ids);
 	JObj o;
 	o["acknowledged"] = J(n);
-	o["still_unread"] = J(ClaudeBridge::Get().CountUnread());
+	o["still_unread"] = J(ClaudeBridge::Get().CountUnread(me->GetID()));
 	return JVal(o);
 }
 
@@ -815,11 +866,27 @@ CLAUDE_TOOL(ToolSetIdentity)
 	bool bHasLetter = false;
 	for(size_t i = 0; i < id.model.size(); ++i) bHasLetter = bHasLetter || isalnum((unsigned char)id.model[i]);
 	if(!bHasLetter) { err = "model is required (letters, digits, spaces, dots or dashes), e.g. Opus"; return JVal(); }
-	ClaudeBridge::Get().SetIdentity(id);
-	ClaudeUpdateSeatLabel();
+	ClaudeBridge::Get().SetCurrentIdentity(id);
+	std::string label = ClaudeIdentityLabel(id);
 	JObj o;
 	o["ok"] = J(true);
-	o["playing_as"] = J(ClaudeIdentityLabel());
+	o["playing_as"] = J(label);
+	ClaudeSession session = ClaudeBridge::Get().Current();
+	if(session.seat >= 0)
+	{
+		ClaudeBindSeatLabel((PlayerTypes)session.seat, label);
+		return JVal(o);
+	}
+	// A seat this same model left behind (a reconnect) is taken back at once.
+	std::vector<PlayerTypes> waiting = ClaudeUnboundSeats();
+	for(size_t i = 0; i < waiting.size(); ++i)
+	{
+		if(!ClaudeSeatLabelMatches(waiting[i], label)) continue;
+		std::string ignored;
+		if(ClaudeClaimSeat(waiting[i], ignored)) o["resumed"] = J("you are back on " + CivName(waiting[i]));
+		return JVal(o);
+	}
+	if(!waiting.empty()) o["seats_waiting_for_a_player"] = JVal(SeatsWaiting());
 	return JVal(o);
 }
 
@@ -828,15 +895,27 @@ CLAUDE_TOOL(ToolTakeSeat)
 	if(!RequireIdentity(err)) return JVal();
 	std::string key = ArgStr(args, "civ");
 	PlayerTypes e = NO_PLAYER;
-	if(key == "teammate" || key == "opponent")
+	if(key == "human" || key == "screen")
+	{
+		ClaudeSession session = ClaudeBridge::Get().Current();
+		if(session.seat >= 0) { err = "you hold a seat; call release_seat first"; return JVal(); }
+		ClaudeBridge::Get().SetCurrentSeat(CLAUDE_SEAT_SCREEN);
+		JObj o;
+		o["ok"] = J(true);
+		o["playing"] = J("the civilization on screen, with the human");
+		return JVal(o);
+	}
+	bool bAssignedOpponent = false;
+	if(key == "opponent") { e = ClaudeWaitingOpponentSeat(); bAssignedOpponent = (e != NO_PLAYER); } // the one opponent seat left behind, before a fresh pick
+	if(e == NO_PLAYER && (key == "teammate" || key == "opponent"))
 	{
 		std::vector<PlayerTypes> choices = ClaimableCivs(key == "teammate");
 		if(choices.empty()) { err = "no computer-run " + key + " civilization is left to play"; return JVal(); }
 		e = choices[GC.getGame().getAsyncRandNum((int)choices.size(), "Claude seat pick")];
 	}
-	else e = FindPlayer(key);
-	if(e == NO_PLAYER) { err = "unknown civilization '" + key + "'; use a name from civs, or teammate or opponent"; return JVal(); }
-	if(!ClaudeClaimSeat(e, err)) return JVal();
+	else if(e == NO_PLAYER) e = FindPlayer(key);
+	if(e == NO_PLAYER) { err = "unknown civilization '" + key + "'; use a name from civs, or teammate, opponent or human"; return JVal(); }
+	if(!ClaudeClaimSeat(e, err, bAssignedOpponent)) return JVal();
 	JObj o;
 	o["ok"] = J(true);
 	o["playing"] = J(CivName(e));
@@ -883,6 +962,8 @@ CLAUDE_TOOL(ToolTestingMode)
 
 CLAUDE_TOOL(ToolLog)
 {
+	CvPlayer* me = Me(err);
+	if(!me) return JVal();
 	std::string text = ArgStr(args, "text");
 	if(text.empty()) { err = "text is required"; return JVal(); }
 	ClaudeBridge::Get().LogLine(CLAUDE_LOG_REASONING, text);
@@ -1085,7 +1166,7 @@ namespace
 		  "Name yourself; call it first on every connection. provider is your maker's product (Claude, ChatGPT, Gemini), model your model family (Opus, Fable, GPT) and version its version (5.5). The game shows it after your leader's name, e.g. Dido (Claude Opus 5.5), and on the log button.",
 		  "{\"type\":\"object\",\"properties\":{\"provider\":{\"type\":\"string\"},\"model\":{\"type\":\"string\"},\"version\":{\"type\":\"string\"}},\"required\":[\"provider\",\"model\",\"version\"]}", ToolSetIdentity, LOG_TURN, false },
 		{ "take_seat",
-		  "Play a computer-controlled civilization in a shared game: it becomes a human seat for you at the human's difficulty, and the game's AI stops acting for it. The human on screen tells you which civilization, or civ=teammate or civ=opponent to have the game pick one; claim it during their turn. Until a seat is claimed every tool acts on the human's own civilization.",
+		  "Play a computer-controlled civilization in a shared game: it becomes a human seat for you at the human's difficulty, and the game's AI stops acting for it. The human on screen tells you which civilization, or civ=teammate or civ=opponent to have the game pick one; claim it during their turn. Also takes back a seat from status.seats_waiting_for_a_player (civ=opponent takes the one opponent seat waiting, without naming it). civ=human plays the civilization on screen instead.",
 		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"}},\"required\":[\"civ\"]}", ToolTakeSeat, LOG_TURN, false },
 		{ "release_seat",
 		  "Hand the claimed civilization back to the game's AI.",

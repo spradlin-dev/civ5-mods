@@ -6,7 +6,7 @@
 
 // Readable text, or "" for popup types that carry nothing worth reporting.
 // Game thread only: looks up game data.
-std::string ClaudeDescribePopup(int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text);
+std::string ClaudeDescribePopup(PlayerTypes ePlayer, int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text);
 
 // Not a game popup: a message the bridge composes itself (text is the whole message).
 const int CLAUDE_POPUP_TEXT = 100000;

@@ -90,7 +90,18 @@ namespace ClaudeTool
 
 	CvPlayer* Me(std::string& err)
 	{
-		PlayerTypes e = ClaudeSeat();
+		ClaudeSession s = ClaudeBridge::Get().Current();
+		if(s.seat == CLAUDE_SEAT_LOST)
+		{
+			err = "your seat is gone: the game was reloaded or that civilization was released; call status, then take_seat to claim one again";
+			return NULL;
+		}
+		if(s.seat == CLAUDE_SEAT_UNDECIDED)
+		{
+			err = "this game has AI seats, so choose yours first: take_seat with a civilization name, teammate, opponent, or human to play the civilization on screen (see status)";
+			return NULL;
+		}
+		PlayerTypes e = ClaudePlayerOf(s);
 		if(e == NO_PLAYER)
 		{
 			err = "no active human player";
@@ -101,7 +112,7 @@ namespace ClaudeTool
 
 	bool RequireIdentity(std::string& err)
 	{
-		if(!ClaudeBridge::Get().Identity().model.empty()) return true;
+		if(!ClaudeBridge::Get().Current().identity.model.empty()) return true;
 		err = "name yourself first: call set_identity with your provider, model and version";
 		return false;
 	}
@@ -115,7 +126,7 @@ namespace ClaudeTool
 			err = "it is not your turn right now (the turn is ending or other civilizations are moving); call wait_for_my_turn";
 			return NULL;
 		}
-		int iUnread = ClaudeBridge::Get().CountUnread();
+		int iUnread = ClaudeBridge::Get().CountUnread(me->GetID());
 		if(iUnread > 0)
 		{
 			err = ClaudeFormat("%d unread game message(s) are waiting: read them in briefing.game_messages, then call acknowledge_messages", iUnread);

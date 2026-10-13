@@ -1,6 +1,7 @@
 # Plan: several AI players in one game
 
-Not started.
+Phase 1 built on 2026-10-13: sessions, seats per model, per-seat stores, the log rules
+below. Not built yet: watching after you are eliminated.
 
 ## Goals
 
@@ -16,6 +17,8 @@ Not started.
 - A log is readable only while its AI plays your civilization or one on your team, checked against its current civilization.
 - The game keeps running, and stays watchable, after the human player is eliminated.
 
-## Open question
+## Log rule
 
-If an AI moves from a teammate's civilization to an opponent's, should the lines it wrote as a teammate stay readable, or hide with the rest of its log?
+Log rule: lines written while the model's civilization was on your team stay readable.
+Lines written while it was your opponent are never shown, even after that model moves to
+a teammate's civilization.

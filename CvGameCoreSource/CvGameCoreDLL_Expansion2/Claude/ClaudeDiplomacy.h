@@ -19,6 +19,9 @@ void ClaudeNoteDealResolved(PlayerTypes eFrom, PlayerTypes eTo, PlayerTypes eAct
 // Requests still waiting for Claude's answer.
 picojson::value ClaudeDiploRequestsJson();
 int ClaudeCountDiploRequests();
+int ClaudeCountDiploRequestsFor(PlayerTypes e);
+// Forgets the requests waiting for a civilization (its seat was given back to the game's AI).
+void ClaudeDropDiploRequestsFor(PlayerTypes e);
 void ClaudeResetDiploRequests();
 // For status: what awaits the seat's answer; empty when nothing does.
 std::string ClaudeDiploWaitingNote();

@@ -714,38 +714,50 @@ int CvLuaGame::lGetGameTurn(lua_State* L)
 	return BasicLuaMethod(L, &CvGame::getGameTurn);
 }
 //------------------------------------------------------------------------------
-//int, table, bool GetClaudeLog(); the table lists { Category = string, Text = string } entries, oldest first.
-//The table is empty and the bool false when the AI player is the on-screen player's opponent.
+//int, table, int GetClaudeLog(); the table lists { Category, Text, Who, Civ } entries, oldest first, then how many AI players are hidden.
+// seq, the lines written for the player on screen or a teammate, and how many
+// connected models play an opponent (whose lines never reach the screen).
 int CvLuaGame::lGetClaudeLog(lua_State* L)
 {
 	std::vector<ClaudeLogEntry> entries;
 	int seq = ClaudeBridge::Get().GetLog(entries);
-	bool bVisible = ClaudeBridge::Get().LogVisibleOnScreen();
-	if(!bVisible) entries.clear();
 	lua_pushinteger(L, seq);
 	lua_createtable(L, (int)entries.size(), 0);
+	int n = 0;
 	for(size_t i = 0; i < entries.size(); ++i)
 	{
-		lua_createtable(L, 0, 2);
+		if(!entries[i].teammate) continue;
+		lua_createtable(L, 0, 4);
 		lua_pushlstring(L, entries[i].category.data(), entries[i].category.size());
 		lua_setfield(L, -2, "Category");
 		lua_pushlstring(L, entries[i].text.data(), entries[i].text.size());
 		lua_setfield(L, -2, "Text");
-		lua_rawseti(L, -2, (int)i + 1);
+		lua_pushlstring(L, entries[i].who.data(), entries[i].who.size());
+		lua_setfield(L, -2, "Who");
+		lua_pushlstring(L, entries[i].civ.data(), entries[i].civ.size());
+		lua_setfield(L, -2, "Civ");
+		lua_rawseti(L, -2, ++n);
 	}
-	lua_pushboolean(L, bVisible);
+	lua_pushinteger(L, ClaudeBridge::Get().HiddenPlayers());
 	return 3;
 }
 //------------------------------------------------------------------------------
-//string, string, string, string GetClaudeIdentity(); provider, model, version and the joined label, "" until the model has named itself.
+//int, string, string GetClaudeIdentity(); how many models have named themselves, then the model and label when exactly one has.
 int CvLuaGame::lGetClaudeIdentity(lua_State* L)
 {
-	ClaudeIdentity id = ClaudeBridge::Get().Identity();
-	lua_pushstring(L, id.provider.c_str());
-	lua_pushstring(L, id.model.c_str());
-	lua_pushstring(L, id.version.c_str());
-	lua_pushstring(L, ClaudeIdentityLabel().c_str());
-	return 4;
+	std::vector<ClaudeSession> sessions = ClaudeBridge::Get().Sessions();
+	int iNamed = 0;
+	ClaudeIdentity only;
+	for(size_t i = 0; i < sessions.size(); ++i)
+	{
+		if(sessions[i].identity.model.empty() || sessions[i].idle) continue;
+		++iNamed;
+		only = sessions[i].identity;
+	}
+	lua_pushinteger(L, iNamed);
+	lua_pushstring(L, iNamed == 1 ? only.model.c_str() : "");
+	lua_pushstring(L, iNamed == 1 ? ClaudeIdentityLabel(only).c_str() : "");
+	return 3;
 }
 //------------------------------------------------------------------------------
 //void ClaudeSetActiveMods(string mods); one mod per line, "name<\t>description".
@@ -781,7 +793,7 @@ int CvLuaGame::lClaudeNotePopup(lua_State* L)
 	const int iData3 = lua_tointeger(L, 4);
 	const bool bOption1 = lua_toboolean(L, 5) != 0;
 	const char* szText = lua_tostring(L, 6);
-	ClaudeBridge::Get().NotePopup(iType, iData1, iData2, iData3, bOption1, szText ? szText : "", true);
+	ClaudeBridge::Get().NotePopup(-1, iType, iData1, iData2, iData3, bOption1, szText ? szText : "", true);
 	return 0;
 }
 //------------------------------------------------------------------------------

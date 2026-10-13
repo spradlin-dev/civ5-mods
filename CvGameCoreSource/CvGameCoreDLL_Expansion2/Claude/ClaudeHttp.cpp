@@ -58,9 +58,11 @@ namespace
 	{
 		char head[512];
 		_snprintf_s(head, sizeof(head), _TRUNCATE,
-		            "HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %u\r\nConnection: close\r\n\r\n",
+		            "HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %u\r\nConnection: close\r\n",
 		            res.status, ReasonPhrase(res.status), res.contentType.c_str(), (unsigned)res.body.size());
 		std::string out(head);
+		if(!res.sessionId.empty()) out += "Mcp-Session-Id: " + res.sessionId + "\r\n";
+		out += "\r\n";
 		out += res.body;
 		SendAll(s, out);
 	}

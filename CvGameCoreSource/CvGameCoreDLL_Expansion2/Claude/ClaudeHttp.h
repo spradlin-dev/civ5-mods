@@ -20,6 +20,7 @@ struct ClaudeHttpResponse
 {
 	int status;
 	std::string contentType;
+	std::string sessionId; // sent as Mcp-Session-Id when set
 	std::string body;
 
 	ClaudeHttpResponse() : status(200), contentType("application/json") {}

@@ -53,7 +53,7 @@ namespace
 	}
 }
 
-std::string ClaudeDescribePopup(int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text)
+std::string ClaudeDescribePopup(PlayerTypes ePlayer, int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text)
 {
 	if(iType == CLAUDE_POPUP_TEXT) return text;
 	switch(iType)
@@ -95,7 +95,7 @@ std::string ClaudeDescribePopup(int iType, int iData1, int iData2, int iData3, b
 	}
 	case BUTTONPOPUP_CITY_CAPTURED:
 	{
-		PlayerTypes eMe = ClaudeSeat();
+		PlayerTypes eMe = ePlayer;
 		CvCity* c = (eMe != NO_PLAYER) ? GET_PLAYER(eMe).getCity(iData1) : NULL;
 		std::string s = ClaudeFormat("Captured %s (city id %d)", c ? c->getName().c_str() : "a city", iData1);
 		if(iData2 > 0) s += ClaudeFormat(", plundering %d gold", iData2);

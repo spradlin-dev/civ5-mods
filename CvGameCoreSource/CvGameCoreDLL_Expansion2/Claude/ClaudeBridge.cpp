@@ -1,5 +1,6 @@
 #include "CvGameCoreDLLPCH.h"
 #include <deque>
+#include <map>
 #include <algorithm>
 #include "ClaudeBridge.h"
 #include "ClaudeCrash.h"
@@ -21,10 +22,13 @@
 #define CLAUDE_WAIT_DEFAULT_SECONDS 25.0
 #define CLAUDE_WAIT_MAX_SECONDS 55.0
 #define CLAUDE_MAX_LOG_ENTRIES 2000
-#define CLAUDE_MAX_POPUPS 200
+#define CLAUDE_MAX_POPUPS 200                     // kept per player
+#define CLAUDE_SESSION_IDLE_MS (2 * 60 * 1000)    // no request for this long: the model has most likely gone
+#define CLAUDE_SESSION_EXPIRE_MS (10 * 60 * 1000) // no request for this long: the session is dropped
 
 struct ClaudePendingPopup
 {
+	int player; // -1: the player on screen when drained
 	int type, data1, data2, data3;
 	bool option1;
 	std::string text;
@@ -33,6 +37,7 @@ struct ClaudePendingPopup
 
 struct ClaudeJob
 {
+	std::string session;
 	std::string tool;
 	picojson::object args;
 	picojson::value result;
@@ -95,17 +100,29 @@ namespace
 
 struct ClaudeBridge::Impl
 {
+	// All fields are read and written under lock.
+	struct Session
+	{
+		ClaudeSession info;
+		bool briefingDue;
+		bool myTurn;
+		int diploSeq; // grows when a new request reaches the session's civilization
+		int diploCount;
+		DWORD lastSeenMs;
+		Session() : briefingDue(true), myTurn(false), diploSeq(0), diploCount(0), lastSeenMs(0) {}
+		bool Idle(DWORD now) const { return now - lastSeenMs > CLAUDE_SESSION_IDLE_MS; }
+	};
+
 	ClaudeHttpServer* pServer;
 	DWORD lastStartAttemptMs;
 	bool startFailureShown;
-	CRITICAL_SECTION lock; // guards jobs, log and every job state transition
+	CRITICAL_SECTION lock; // guards jobs, log, sessions, popups and every job state transition
 	std::deque<ClaudeJob*> jobs;
 	std::deque<ClaudeLogEntry> log;
-	ClaudeIdentity identity;
+	std::map<std::string, Session> sessions;
+	bool inJob;               // game thread: a job is running, for the session named by currentToken
+	std::string currentToken;
 	std::vector<ClaudeModInfo> activeMods;
-	bool gameBriefingDue;
-	volatile int identityVersion; // bumped on every change; Tick relabels the seat when it moves
-	int labelledIdentityVersion;  // game thread
 	int logSeq;
 	int lastLogTurn;
 	std::vector<ClaudePendingPopup> pendingPopups; // written by the UI thread, drained by Tick
@@ -119,11 +136,8 @@ struct ClaudeBridge::Impl
 	volatile int gameTurn;
 	volatile bool testingMode;
 	volatile bool shuttingDown;
-	volatile bool myTurn;
-	volatile bool screenHumanTurn; // the human on screen (not Claude's seat) may act
-	volatile int diploSeq;         // grows when a new request reaches the seat
-	int diploCount;
-	volatile bool logVisible;
+	volatile bool screenHumanTurn; // the human on screen may act
+	volatile int hiddenPlayers;    // live sessions playing an opponent of the player on screen
 	volatile DWORD lastTickMs;
 
 	Impl();
@@ -133,23 +147,28 @@ struct ClaudeBridge::Impl
 	void Tick();
 	void TryStart();
 	void Shutdown();
-	void UpdateTurnFlags();
+	void UpdateSessions();
 	bool RunJob(ClaudeJob* pJob); // true: run it again on a later frame
-	void LogLine(const char* category, const std::string& text);
+	void Append(int player, const std::string& who, const char* category, const std::string& text);
 	void DrainPopups();
 	void ResetForNewGame();
+	Session* CurrentSession(); // under lock
 
 	// any thread
 	int GetLog(std::vector<ClaudeLogEntry>& out);
 	bool GameRunning() const { return lastTickMs != 0 && GetTickCount() - lastTickMs < CLAUDE_GAME_IDLE_MS; }
+	void Touch(const std::string& token); // creates the session when new
+	// The session's flags; false when it no longer exists.
+	bool Flags(const std::string& token, bool& bMyTurn, int& iDiploSeq, int& iSeat);
 
 	// HTTP thread
 	static void HttpHandler(const ClaudeHttpRequest& req, ClaudeHttpResponse& res);
 	void HandleHttp(const ClaudeHttpRequest& req, ClaudeHttpResponse& res);
-	picojson::value HandleRpc(const picojson::value& request, bool& bIsNotification);
-	picojson::value CallTool(const std::string& name, const picojson::object& args, bool& bIsError);
-	picojson::value AdvanceRound(const picojson::object& args, bool& bIsError);
-	picojson::value RunOnGameThread(const std::string& tool, const picojson::object& args, std::string& error);
+	picojson::value HandleRpc(const picojson::value& request, const std::string& token, bool& bIsNotification);
+	picojson::value CallTool(const std::string& token, const std::string& name, const picojson::object& args, bool& bIsError);
+	picojson::value AdvanceRound(const std::string& token, const picojson::object& args, bool& bIsError);
+	picojson::value RunOnGameThread(const std::string& token, const std::string& tool, const picojson::object& args, std::string& error);
+	bool SessionWakes(const std::string& token, int iDiploSeqAtStart);
 };
 
 ClaudeBridge& ClaudeBridge::Get()
@@ -162,16 +181,111 @@ ClaudeBridge::ClaudeBridge() : m_pImpl(new Impl()) {}
 ClaudeBridge::~ClaudeBridge() { delete m_pImpl; }
 void ClaudeBridge::Tick() { m_pImpl->Tick(); }
 void ClaudeBridge::Shutdown() { m_pImpl->Shutdown(); }
-void ClaudeBridge::LogLine(const char* category, const std::string& text) { m_pImpl->LogLine(category, text); }
 
-bool ClaudeBridge::LogVisibleOnScreen() const { return m_pImpl->logVisible; }
+// ---------------------------------------------------------------- sessions
 
-ClaudeIdentity ClaudeBridge::Identity()
+ClaudeBridge::Impl::Session* ClaudeBridge::Impl::CurrentSession()
+{
+	if(!inJob) return NULL;
+	std::map<std::string, Session>::iterator it = sessions.find(currentToken);
+	return (it == sessions.end()) ? NULL : &it->second;
+}
+
+void ClaudeBridge::Impl::Touch(const std::string& token)
+{
+	EnterCriticalSection(&lock);
+	Session& s = sessions[token];
+	s.info.token = token;
+	s.lastSeenMs = GetTickCount();
+	LeaveCriticalSection(&lock);
+}
+
+bool ClaudeBridge::Impl::Flags(const std::string& token, bool& bMyTurn, int& iDiploSeq, int& iSeat)
+{
+	EnterCriticalSection(&lock);
+	std::map<std::string, Session>::iterator it = sessions.find(token);
+	bool bFound = it != sessions.end();
+	if(bFound)
+	{
+		bMyTurn = it->second.myTurn;
+		iDiploSeq = it->second.diploSeq;
+		iSeat = it->second.info.seat;
+	}
+	LeaveCriticalSection(&lock);
+	return bFound;
+}
+
+ClaudeSession ClaudeBridge::Current()
+{
+	ClaudeSession out;
+	EnterCriticalSection(&m_pImpl->lock);
+	Impl::Session* s = m_pImpl->CurrentSession();
+	if(s) out = s->info;
+	LeaveCriticalSection(&m_pImpl->lock);
+	return out;
+}
+
+void ClaudeBridge::SetCurrentIdentity(const ClaudeIdentity& identity)
 {
 	EnterCriticalSection(&m_pImpl->lock);
-	ClaudeIdentity id = m_pImpl->identity;
+	Impl::Session* s = m_pImpl->CurrentSession();
+	if(s) s->info.identity = identity;
 	LeaveCriticalSection(&m_pImpl->lock);
-	return id;
+}
+
+void ClaudeBridge::SetCurrentSeat(int seat)
+{
+	EnterCriticalSection(&m_pImpl->lock);
+	Impl::Session* s = m_pImpl->CurrentSession();
+	if(s) s->info.seat = seat;
+	LeaveCriticalSection(&m_pImpl->lock);
+}
+
+std::vector<ClaudeSession> ClaudeBridge::Sessions()
+{
+	std::vector<ClaudeSession> out;
+	DWORD now = GetTickCount();
+	EnterCriticalSection(&m_pImpl->lock);
+	for(std::map<std::string, Impl::Session>::iterator it = m_pImpl->sessions.begin(); it != m_pImpl->sessions.end(); ++it)
+	{
+		ClaudeSession s = it->second.info;
+		s.idle = it->second.Idle(now);
+		out.push_back(s);
+	}
+	LeaveCriticalSection(&m_pImpl->lock);
+	return out;
+}
+
+// For the screen a named session wins over one that has not named itself yet.
+bool ClaudeBridge::SessionForSeat(int seat, ClaudeSession& out)
+{
+	bool bFound = false;
+	DWORD now = GetTickCount();
+	EnterCriticalSection(&m_pImpl->lock);
+	for(std::map<std::string, Impl::Session>::iterator it = m_pImpl->sessions.begin(); it != m_pImpl->sessions.end(); ++it)
+	{
+		if(it->second.info.seat != seat || it->second.Idle(now)) continue;
+		if(bFound && it->second.info.identity.model.empty()) continue;
+		out = it->second.info;
+		bFound = true;
+		if(!out.identity.model.empty()) break;
+	}
+	LeaveCriticalSection(&m_pImpl->lock);
+	return bFound;
+}
+
+void ClaudeBridge::UnbindSeat(int seat)
+{
+	EnterCriticalSection(&m_pImpl->lock);
+	for(std::map<std::string, Impl::Session>::iterator it = m_pImpl->sessions.begin(); it != m_pImpl->sessions.end(); ++it)
+		if(it->second.info.seat == seat) it->second.info.seat = CLAUDE_SEAT_LOST;
+	LeaveCriticalSection(&m_pImpl->lock);
+}
+
+bool ClaudeBridge::ScreenPlayed()
+{
+	ClaudeSession s;
+	return SessionForSeat(CLAUDE_SEAT_SCREEN, s);
 }
 
 std::vector<ClaudeModInfo> ClaudeBridge::ActiveMods()
@@ -186,15 +300,20 @@ void ClaudeBridge::SetActiveMods(const std::vector<ClaudeModInfo>& mods)
 {
 	EnterCriticalSection(&m_pImpl->lock);
 	m_pImpl->activeMods = mods;
-	m_pImpl->gameBriefingDue = true; // the UI reports mods once per loaded game
 	LeaveCriticalSection(&m_pImpl->lock);
+	MarkGameBriefingDue(); // the UI reports mods once per loaded game
 }
 
 bool ClaudeBridge::TakeGameBriefingDue()
 {
+	bool bDue = false;
 	EnterCriticalSection(&m_pImpl->lock);
-	bool bDue = m_pImpl->gameBriefingDue;
-	m_pImpl->gameBriefingDue = false;
+	Impl::Session* s = m_pImpl->CurrentSession();
+	if(s)
+	{
+		bDue = s->briefingDue;
+		s->briefingDue = false;
+	}
 	LeaveCriticalSection(&m_pImpl->lock);
 	return bDue;
 }
@@ -202,23 +321,32 @@ bool ClaudeBridge::TakeGameBriefingDue()
 void ClaudeBridge::MarkGameBriefingDue()
 {
 	EnterCriticalSection(&m_pImpl->lock);
-	m_pImpl->gameBriefingDue = true;
+	for(std::map<std::string, Impl::Session>::iterator it = m_pImpl->sessions.begin(); it != m_pImpl->sessions.end(); ++it)
+		it->second.briefingDue = true;
 	LeaveCriticalSection(&m_pImpl->lock);
 }
 
-void ClaudeBridge::SetIdentity(const ClaudeIdentity& identity)
+// ---------------------------------------------------------------- log and popups
+
+void ClaudeBridge::LogLine(const char* category, const std::string& text)
 {
-	EnterCriticalSection(&m_pImpl->lock);
-	m_pImpl->identity = identity;
-	++m_pImpl->identityVersion;
-	LeaveCriticalSection(&m_pImpl->lock);
+	if(!m_pImpl->inJob) { m_pImpl->Append(-1, "", category, text); return; }
+	ClaudeSession s = Current();
+	m_pImpl->Append((int)ClaudePlayerOf(s), ClaudeIdentityLabel(s.identity), category, text);
 }
-int ClaudeBridge::GetLog(std::vector<ClaudeLogEntry>& out) { return m_pImpl->GetLog(out); }
 
-void ClaudeBridge::NotePopup(int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text, bool bOnScreen)
+void ClaudeBridge::LogLineFor(int player, const char* category, const std::string& text)
+{
+	m_pImpl->Append(player, player >= 0 ? ClaudeSeatLabel((PlayerTypes)player) : "", category, text);
+}
+
+int ClaudeBridge::GetLog(std::vector<ClaudeLogEntry>& out) { return m_pImpl->GetLog(out); }
+int ClaudeBridge::HiddenPlayers() const { return m_pImpl->hiddenPlayers; }
+
+void ClaudeBridge::NotePopup(int player, int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text, bool bOnScreen)
 {
 	ClaudePendingPopup p;
-	p.type = iType; p.data1 = iData1; p.data2 = iData2; p.data3 = iData3; p.option1 = bOption1; p.text = text; p.onScreen = bOnScreen;
+	p.player = player; p.type = iType; p.data1 = iData1; p.data2 = iData2; p.data3 = iData3; p.option1 = bOption1; p.text = text; p.onScreen = bOnScreen;
 	EnterCriticalSection(&m_pImpl->lock);
 	if(m_pImpl->pendingPopups.size() < CLAUDE_MAX_POPUPS) m_pImpl->pendingPopups.push_back(p);
 	else ++m_pImpl->pendingDropped;
@@ -237,24 +365,24 @@ std::string ClaudeBridge::TakeDialogsToClose()
 void ClaudeBridge::SetTestingMode(bool bOn) { m_pImpl->testingMode = bOn; }
 bool ClaudeBridge::TestingMode() const { return m_pImpl->testingMode; }
 
-int ClaudeBridge::CountUnread()
+int ClaudeBridge::CountUnread(int player)
 {
 	int n = 0;
 	EnterCriticalSection(&m_pImpl->lock);
 	for(size_t i = 0; i < m_pImpl->popups.size(); ++i)
-		if(!m_pImpl->popups[i].read) ++n;
+		if(m_pImpl->popups[i].player == player && !m_pImpl->popups[i].read) ++n;
 	LeaveCriticalSection(&m_pImpl->lock);
 	return n;
 }
 
-int ClaudeBridge::Acknowledge(const std::vector<int>* ids)
+int ClaudeBridge::Acknowledge(int player, const std::vector<int>* ids)
 {
 	int n = 0;
 	EnterCriticalSection(&m_pImpl->lock);
 	for(size_t i = 0; i < m_pImpl->popups.size(); ++i)
 	{
 		ClaudePopup& p = m_pImpl->popups[i];
-		if(p.read) continue;
+		if(p.read || p.player != player) continue;
 		bool bWanted = (ids == NULL);
 		for(size_t k = 0; !bWanted && k < ids->size(); ++k) bWanted = ((*ids)[k] == p.id);
 		if(!bWanted) continue;
@@ -266,19 +394,21 @@ int ClaudeBridge::Acknowledge(const std::vector<int>* ids)
 	return n;
 }
 
-std::vector<ClaudePopup> ClaudeBridge::GetPopupsSince(int iTurn)
+std::vector<ClaudePopup> ClaudeBridge::GetPopupsSince(int player, int iTurn)
 {
 	std::vector<ClaudePopup> out;
 	EnterCriticalSection(&m_pImpl->lock);
 	for(size_t i = 0; i < m_pImpl->popups.size(); ++i)
-		if(m_pImpl->popups[i].turn >= iTurn || !m_pImpl->popups[i].read) out.push_back(m_pImpl->popups[i]);
+		if(m_pImpl->popups[i].player == player && (m_pImpl->popups[i].turn >= iTurn || !m_pImpl->popups[i].read)) out.push_back(m_pImpl->popups[i]);
 	LeaveCriticalSection(&m_pImpl->lock);
 	return out;
 }
 
+// ---------------------------------------------------------------- game thread
+
 ClaudeBridge::Impl::Impl()
-	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), logSeq(0), gameBriefingDue(true), logVisible(true), identityVersion(0), labelledIdentityVersion(-1), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0), gameTurn(-1), testingMode(false),
-	  shuttingDown(false), myTurn(false), screenHumanTurn(false), diploSeq(0), diploCount(0), lastTickMs(0)
+	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), inJob(false), logSeq(0), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0),
+	  gameTurn(-1), testingMode(false), shuttingDown(false), screenHumanTurn(false), hiddenPlayers(0), lastTickMs(0)
 {
 	ClaudeInstallCrashHandler();
 	InitializeCriticalSection(&lock);
@@ -334,21 +464,58 @@ void ClaudeBridge::Impl::TryStart()
 	if(!startFailureShown)
 	{
 		startFailureShown = true;
-		LogLine(CLAUDE_LOG_ALWAYS, msg + " (retrying)");
+		Append(-1, "", CLAUDE_LOG_ALWAYS, msg + " (retrying)");
 	}
 	delete pServer;
 	pServer = NULL;
 }
 
-void ClaudeBridge::Impl::UpdateTurnFlags()
+// Per session: drops it when its model has been silent for long; a new session in a
+// game without seats plays the screen, as the one model always did; a seat whose slot
+// is no longer a seat is lost; a lost seat comes back when a waiting seat carries the
+// model's own name (a reload of the same game); then its turn and diplomacy flags.
+void ClaudeBridge::Impl::UpdateSessions()
 {
-	PlayerTypes eSeat = ClaudeSeat();
-	myTurn = (eSeat != NO_PLAYER) && ClaudeIsPlayerTurn(GET_PLAYER(eSeat));
 	PlayerTypes eActive = GC.getGame().getActivePlayer();
-	screenHumanTurn = (eActive != NO_PLAYER) && eActive != eSeat && ClaudeIsPlayerTurn(GET_PLAYER(eActive));
-	int iRequests = ClaudeCountDiploRequests();
-	if(iRequests > diploCount) ++diploSeq;
-	diploCount = iRequests;
+	screenHumanTurn = (eActive != NO_PLAYER) && GET_PLAYER(eActive).isHuman() && ClaudeIsPlayerTurn(GET_PLAYER(eActive));
+	DWORD now = GetTickCount();
+	bool bAnySeat = ClaudeAnySeat();
+	std::vector<PlayerTypes> unbound = ClaudeUnboundSeats();
+	int iHidden = 0;
+	EnterCriticalSection(&lock);
+	for(std::map<std::string, Session>::iterator it = sessions.begin(); it != sessions.end();)
+	{
+		Session& s = it->second;
+		if(now - s.lastSeenMs > CLAUDE_SESSION_EXPIRE_MS && !(inJob && it->first == currentToken))
+		{
+			sessions.erase(it++);
+			continue;
+		}
+		if(s.info.seat == CLAUDE_SEAT_UNDECIDED && !bAnySeat) s.info.seat = CLAUDE_SEAT_SCREEN;
+		if(s.info.seat >= 0 && !ClaudeIsSeat((PlayerTypes)s.info.seat)) s.info.seat = CLAUDE_SEAT_LOST;
+		if(s.info.seat == CLAUDE_SEAT_LOST)
+		{
+			std::string label = ClaudeIdentityLabel(s.info.identity);
+			for(size_t i = 0; i < unbound.size(); ++i)
+			{
+				if(!ClaudeSeatLabelMatches(unbound[i], label)) continue;
+				for(std::map<std::string, Session>::iterator other = sessions.begin(); other != sessions.end(); ++other)
+					if(other->second.info.seat == unbound[i]) other->second.info.seat = CLAUDE_SEAT_LOST; // an idle session of the same model
+				s.info.seat = unbound[i];
+				unbound.erase(unbound.begin() + i);
+				break;
+			}
+		}
+		if(s.info.seat >= 0 && !s.Idle(now) && !ClaudeOnScreenTeam((PlayerTypes)s.info.seat)) ++iHidden;
+		PlayerTypes ePlayer = ClaudePlayerOf(s.info);
+		s.myTurn = ePlayer != NO_PLAYER && ClaudeIsPlayerTurn(GET_PLAYER(ePlayer));
+		int iRequests = ePlayer != NO_PLAYER ? ClaudeCountDiploRequestsFor(ePlayer) : 0;
+		if(iRequests > s.diploCount) ++s.diploSeq;
+		s.diploCount = iRequests;
+		++it;
+	}
+	hiddenPlayers = iHidden;
+	LeaveCriticalSection(&lock);
 }
 
 void ClaudeBridge::Impl::Tick()
@@ -359,13 +526,7 @@ void ClaudeBridge::Impl::Tick()
 	int iTurn = GC.getGame().getGameTurn();
 	if(CvPreGame::mapRandomSeed() != gameSeed || iTurn < gameTurn) ResetForNewGame();
 	gameTurn = iTurn;
-	logVisible = ClaudeLogVisibleOnScreen();
-	if(identityVersion != labelledIdentityVersion)
-	{
-		labelledIdentityVersion = identityVersion;
-		ClaudeUpdateSeatLabel();
-	}
-	UpdateTurnFlags();
+	UpdateSessions();
 	DrainPopups();
 
 	for(;;)
@@ -380,11 +541,14 @@ void ClaudeBridge::Impl::Tick()
 		LeaveCriticalSection(&lock);
 		if(pJob == NULL) break;
 
+		currentToken = pJob->session;
+		inJob = true;
 		bool bRetry = RunJob(pJob);
-		UpdateTurnFlags();
+		inJob = false;
+		UpdateSessions();
 		if(bRetry)
 		{
-			// Jobs behind it wait for the retry window; one MCP client sends one call at a time.
+			// Jobs behind it wait for the retry window; each MCP client sends one call at a time.
 			EnterCriticalSection(&lock);
 			jobs.push_front(pJob);
 			LeaveCriticalSection(&lock);
@@ -408,12 +572,13 @@ void ClaudeBridge::Impl::DrainPopups()
 	int iLost = pendingDropped;
 	pendingDropped = 0;
 	LeaveCriticalSection(&lock);
-	if(iLost > 0) LogLine(CLAUDE_LOG_MESSAGES, ClaudeFormat("[bridge] %d game message(s) were lost: more than %d arrived before the game thread read them", iLost, CLAUDE_MAX_POPUPS));
-	bool bScreenIsMine = ClaudeSeatOnScreen();
+	if(iLost > 0) Append(-1, "", CLAUDE_LOG_MESSAGES, ClaudeFormat("[bridge] %d game message(s) were lost: more than %d arrived before the game thread read them", iLost, CLAUDE_MAX_POPUPS));
+	bool bScreenPlayed = ClaudeBridge::Get().ScreenPlayed();
+	PlayerTypes eActive = GC.getGame().getActivePlayer();
 	for(size_t i = 0; i < pending.size(); ++i)
 	{
 		const ClaudePendingPopup& p = pending[i];
-		if(p.onScreen && !bScreenIsMine) // the human's own popup
+		if(p.onScreen && !bScreenPlayed) // the human's own popup
 		{
 			const char* dialog = ClaudePopupDialogToClose(p.type);
 			if(testingMode && *dialog)
@@ -421,14 +586,15 @@ void ClaudeBridge::Impl::DrainPopups()
 				EnterCriticalSection(&lock);
 				dialogsToClose += std::string(dialog) + "\n";
 				LeaveCriticalSection(&lock);
-				LogLine(CLAUDE_LOG_TURN, std::string("Testing: closed the human's ") + dialog + " unread");
+				Append(-1, "", CLAUDE_LOG_TURN, std::string("Testing: closed the human's ") + dialog + " unread");
 			}
 			continue;
 		}
 		ClaudePopup popup;
 		popup.turn = GC.getGame().getGameTurn();
+		popup.player = p.onScreen ? (int)eActive : p.player;
 		popup.dialog = p.onScreen ? ClaudePopupDialogToClose(p.type) : "";
-		popup.text = ClaudeDescribePopup(p.type, p.data1, p.data2, p.data3, p.option1, p.text);
+		popup.text = ClaudeDescribePopup((PlayerTypes)popup.player, p.type, p.data1, p.data2, p.data3, p.option1, p.text);
 		if(popup.text.empty())
 		{
 			if(popup.dialog.empty()) continue;
@@ -439,24 +605,28 @@ void ClaudeBridge::Impl::DrainPopups()
 		EnterCriticalSection(&lock);
 		popup.id = ++popupSeq;
 		popups.push_back(popup);
-		if(popups.size() > CLAUDE_MAX_POPUPS)
+		int iKept = 0;
+		for(size_t k = 0; k < popups.size(); ++k)
+			if(popups[k].player == popup.player) ++iKept;
+		for(size_t k = 0; iKept > CLAUDE_MAX_POPUPS && k < popups.size();)
 		{
-			size_t excess = popups.size() - CLAUDE_MAX_POPUPS;
-			for(size_t k = 0; k < excess; ++k)
+			if(popups[k].player != popup.player) { ++k; continue; }
+			if(!popups[k].read)
 			{
-				if(popups[k].read) continue;
 				++iDroppedUnread;
 				if(!popups[k].dialog.empty()) dialogsToClose += popups[k].dialog + "\n";
 			}
-			popups.erase(popups.begin(), popups.begin() + excess);
+			popups.erase(popups.begin() + k);
+			--iKept;
 		}
 		LeaveCriticalSection(&lock);
-		if(iDroppedUnread > 0) LogLine(CLAUDE_LOG_MESSAGES, ClaudeFormat("[bridge] %d unread game message(s) dropped: more than %d were kept", iDroppedUnread, CLAUDE_MAX_POPUPS));
-		LogLine(CLAUDE_LOG_MESSAGES, ClaudeFormat("Game message #%d: ", popup.id) + popup.text);
+		if(iDroppedUnread > 0) ClaudeBridge::Get().LogLineFor(popup.player, CLAUDE_LOG_MESSAGES, ClaudeFormat("[bridge] %d unread game message(s) dropped: more than %d were kept", iDroppedUnread, CLAUDE_MAX_POPUPS));
+		ClaudeBridge::Get().LogLineFor(popup.player, CLAUDE_LOG_MESSAGES, ClaudeFormat("Game message #%d: ", popup.id) + popup.text);
 	}
 }
 
 // Keeps pendingPopups: the UI may already have reported the new game's first popups.
+// Sessions keep their names but lose their seats: the slots belong to the new game.
 void ClaudeBridge::Impl::ResetForNewGame()
 {
 	EnterCriticalSection(&lock);
@@ -465,11 +635,14 @@ void ClaudeBridge::Impl::ResetForNewGame()
 	popupSeq = 0;
 	dialogsToClose.clear();
 	testingMode = false;
+	for(std::map<std::string, Session>::iterator it = sessions.begin(); it != sessions.end(); ++it)
+	{
+		if(it->second.info.seat >= 0) it->second.info.seat = CLAUDE_SEAT_LOST;
+		it->second.diploCount = 0;
+	}
 	LeaveCriticalSection(&lock);
-	labelledIdentityVersion = -1; // a loaded save carries the label of whichever model played it
 	ClaudeGameId();
 	ClaudeResetDiploRequests();
-	diploCount = 0;
 }
 
 namespace
@@ -480,6 +653,9 @@ namespace
 
 void ClaudeBridge::RetryLater() { s_retryRequested = true; }
 
+// The log lines for a call are written after it ran, for the civilization the session
+// played before the call or, when it had none, the one it plays after: a claim of an
+// opponent civilization is then hidden with the rest of that civilization's lines.
 bool ClaudeBridge::Impl::RunJob(ClaudeJob* pJob)
 {
 	const ClaudeToolDef* pTool = ClaudeFindTool(pJob->tool);
@@ -497,12 +673,13 @@ bool ClaudeBridge::Impl::RunJob(ClaudeJob* pJob)
 	bool bFirstTry = !pJob->retrying;
 	bool bLogged = pTool->logAs != LOG_NONE;
 	const char* szCategory = bLogged ? ClaudeLogCategory(*pTool, pJob->args) : "";
-	if(bLogged && bFirstTry) LogLine(szCategory, ClaudeDescribeCall(*pTool, pJob->args));
+	PlayerTypes ePlayerBefore = ClaudePlayerOf(ClaudeBridge::Get().Current());
 	ClaudeCrashSetContext((pJob->tool + " " + picojson::value(pJob->args).serialize()).c_str());
 	s_retryRequested = false;
 	pJob->error.clear();
 	pJob->result = pTool->handler(pJob->args, pJob->error);
 	ClaudeCrashSetContext("");
+	bool bRetry = false;
 	if(s_retryRequested)
 	{
 		DWORD now = GetTickCount();
@@ -511,33 +688,41 @@ bool ClaudeBridge::Impl::RunJob(ClaudeJob* pJob)
 			pJob->retrying = true;
 			pJob->firstTryMs = now;
 		}
-		if(now - pJob->firstTryMs < CLAUDE_RETRY_WINDOW_MS) return true;
+		bRetry = now - pJob->firstTryMs < CLAUDE_RETRY_WINDOW_MS;
 	}
-	if(!bLogged) return false;
+	if(!bLogged) return bRetry;
+	ClaudeSession s = ClaudeBridge::Get().Current();
+	int player = (ePlayerBefore != NO_PLAYER) ? (int)ePlayerBefore : (int)ClaudePlayerOf(s);
+	std::string who = ClaudeIdentityLabel(s.identity);
+	if(bFirstTry) Append(player, who, szCategory, ClaudeDescribeCall(*pTool, pJob->args));
+	if(bRetry) return true;
 	std::string outcome = pJob->error.empty() ? ClaudeDescribeResult(*pTool, pJob->result) : "Refused: " + pJob->error;
-	if(!outcome.empty()) LogLine(szCategory, "    " + outcome);
+	if(!outcome.empty()) Append(player, who, szCategory, "    " + outcome);
 	return false;
 }
 
-void ClaudeBridge::Impl::LogLine(const char* category, const std::string& text)
+void ClaudeBridge::Impl::Append(int player, const std::string& who, const char* category, const std::string& text)
 {
 	int iTurn = GC.getGame().getGameTurn();
+	// With nobody on screen a seat's line is hidden: the rule is absolute, the moment is transient.
+	bool bTeammate = (player >= 0) ? (GC.getGame().getActivePlayer() != NO_PLAYER && ClaudeOnScreenTeam((PlayerTypes)player)) : who.empty();
+	std::string civ = (player >= 0 && player != GC.getGame().getActivePlayer()) ? GET_PLAYER((PlayerTypes)player).getCivilizationShortDescription() : "";
 	EnterCriticalSection(&lock);
 	if(iTurn != lastLogTurn)
 	{
-		ClaudeLogEntry separator = { CLAUDE_LOG_ALWAYS, ClaudeFormat("---------- Turn %d ----------", iTurn) };
+		ClaudeLogEntry separator = { CLAUDE_LOG_ALWAYS, ClaudeFormat("---------- Turn %d ----------", iTurn), -1, "", "", true };
 		log.push_back(separator);
 		++logSeq;
 		lastLogTurn = iTurn;
 	}
-	ClaudeLogEntry entry = { category, text };
+	ClaudeLogEntry entry = { category, text, player, who, civ, bTeammate };
 	log.push_back(entry);
 	++logSeq;
 	while(log.size() > CLAUDE_MAX_LOG_ENTRIES) log.pop_front();
 	LeaveCriticalSection(&lock);
 
 	FILogFile* pLog = LOGFILEMGR.GetLog("AIThinking.log", FILogFile::kDontTimeStamp);
-	if(pLog) pLog->Msg("[%s] %s", category, text.c_str());
+	if(pLog) pLog->Msg("[%s] %s%s%s", category, who.c_str(), who.empty() ? "" : ": ", text.c_str());
 }
 
 int ClaudeBridge::Impl::GetLog(std::vector<ClaudeLogEntry>& out)
@@ -588,8 +773,25 @@ void ClaudeBridge::Impl::HandleHttp(const ClaudeHttpRequest& req, ClaudeHttpResp
 		return;
 	}
 
+	// The session is whatever Mcp-Session-Id the client sends; initialize starts a fresh
+	// one and hands its id back. An id the server no longer knows (the game restarted)
+	// simply starts a session under that id: the model then names itself again. A client
+	// that never sends one shares the session with the empty id.
+	std::string token;
+	std::map<std::string, std::string>::const_iterator itSession = req.headers.find("mcp-session-id");
+	if(itSession != req.headers.end()) token = itSession->second;
+	const picojson::object& o = request.get<picojson::object>();
+	picojson::object::const_iterator itMethod = o.find("method");
+	if(itMethod != o.end() && itMethod->second.is<std::string>() && itMethod->second.get<std::string>() == "initialize")
+	{
+		token = "civ5-" + ClaudeNewUuid();
+		res.sessionId = token;
+	}
+	Touch(token);
+
 	bool bIsNotification = false;
-	picojson::value response = HandleRpc(request, bIsNotification);
+	picojson::value response = HandleRpc(request, token, bIsNotification);
+	Touch(token); // a long wait counts as presence
 	if(bIsNotification)
 	{
 		res.status = 202;
@@ -600,7 +802,7 @@ void ClaudeBridge::Impl::HandleHttp(const ClaudeHttpRequest& req, ClaudeHttpResp
 	res.body = response.serialize();
 }
 
-picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bool& bIsNotification)
+picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, const std::string& token, bool& bIsNotification)
 {
 	const picojson::object& o = request.get<picojson::object>();
 	picojson::object::const_iterator itMethod = o.find("method");
@@ -620,13 +822,10 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bo
 
 	if(method == "initialize")
 	{
-		ClaudeBridge::Get().SetIdentity(ClaudeIdentity());
-		ClaudeBridge::Get().MarkGameBriefingDue();
 		std::string version = "2025-06-18";
 		picojson::object::const_iterator itV = params.find("protocolVersion");
 		if(itV != params.end() && itV->second.is<std::string>() && !itV->second.get<std::string>().empty())
 			version = itV->second.get<std::string>();
-
 		picojson::object caps;
 		caps["tools"] = picojson::value(picojson::object());
 		picojson::object info;
@@ -652,11 +851,15 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bo
 		    "Later statuses list only the mod names; the game_settings and mods tools show the full detail again. "
 		    "Right after naming yourself, call status and tell the human in your reply who you are and what you play: "
 		    "their own civilization, a teammate (name it), or an opponent (never name it; they will see you once they meet you). "
-		    "If no seat is claimed and the human has not told you your role, ask them first and offer the choices: "
+		    "Several models can play in one game, each on its own seat; status.other_ai_players names them. "
+		    "When you reconnect, set_identity gives you back the seat you held; status.seats_waiting_for_a_player lists seats "
+		    "other models left, and take_seat takes one the human assigns you. "
+		    "In a game with seats a new connection must choose: take_seat with a civilization, teammate, opponent, "
+		    "or human to play the civilization on screen; in a game without seats you play the civilization on screen. "
+		    "If the human has not told you your role, ask them first and offer the choices: "
 		    "play their civilization, a teammate (status.teammate_civs_you_could_play), or a secret opponent. "
 		    "Claim a teammate or opponent with take_seat during their turn; civ=opponent lets the game pick one at random. "
-		    "Until a seat is claimed every tool acts on the human's own civilization. A claimed seat is off screen; "
-		    "your turn comes after the human's each round, so wait_for_my_turn may take as long as they do. "
+		    "A claimed seat is off screen; your turn comes after the human's each round, so wait_for_my_turn may take as long as they do. "
 		    "Other leaders talk to you through diplomacy requests (briefing.diplomacy_requests): answer them with respond_to_request. "
 		    "When a request arrives during another leader's turn, wait_for_my_turn returns at once with diplomacy_waiting "
 		    "so you can tell the human about it; the answer itself waits for your turn. "
@@ -707,7 +910,7 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bo
 			args = itArgs->second.get<picojson::object>();
 
 		bool bIsError = false;
-		picojson::value value = CallTool(itName->second.get<std::string>(), args, bIsError);
+		picojson::value value = CallTool(token, itName->second.get<std::string>(), args, bIsError);
 
 		picojson::object text;
 		text["type"] = picojson::value("text");
@@ -723,7 +926,17 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, bo
 	return JsonRpcError(id, -32601, "method not found: " + method);
 }
 
-picojson::value ClaudeBridge::Impl::CallTool(const std::string& name, const picojson::object& args, bool& bIsError)
+// Whether the session's turn is open, a new diplomacy request reached it, or it has no
+// civilization to wait for (status then says what to do).
+bool ClaudeBridge::Impl::SessionWakes(const std::string& token, int iDiploSeqAtStart)
+{
+	bool bMyTurn = false;
+	int iDiploSeq = 0, iSeat = CLAUDE_SEAT_SCREEN;
+	if(!Flags(token, bMyTurn, iDiploSeq, iSeat)) return true;
+	return bMyTurn || iDiploSeq != iDiploSeqAtStart || iSeat == CLAUDE_SEAT_LOST || iSeat == CLAUDE_SEAT_UNDECIDED;
+}
+
+picojson::value ClaudeBridge::Impl::CallTool(const std::string& token, const std::string& name, const picojson::object& args, bool& bIsError)
 {
 	const ClaudeToolDef* pTool = ClaudeFindTool(name);
 	if(pTool == NULL)
@@ -740,7 +953,7 @@ picojson::value ClaudeBridge::Impl::CallTool(const std::string& name, const pico
 
 	if(pTool->handler == NULL)
 	{
-		if(name == CLAUDE_TOOL_ADVANCE_ROUND) return AdvanceRound(args, bIsError);
+		if(name == CLAUDE_TOOL_ADVANCE_ROUND) return AdvanceRound(token, args, bIsError);
 		bIsError = true;
 		return picojson::value("no bridge handler for " + name);
 	}
@@ -754,13 +967,18 @@ picojson::value ClaudeBridge::Impl::CallTool(const std::string& name, const pico
 		if(timeout > CLAUDE_WAIT_MAX_SECONDS) timeout = CLAUDE_WAIT_MAX_SECONDS;
 
 		DWORD start = GetTickCount();
-		int iSeqAtStart = diploSeq;
-		while(!shuttingDown && !(GameRunning() && (myTurn || diploSeq != iSeqAtStart)) && GetTickCount() - start < (DWORD)(timeout * 1000.0))
+		bool bMyTurn = false;
+		int iSeqAtStart = 0, iSeat = 0;
+		Flags(token, bMyTurn, iSeqAtStart, iSeat);
+		while(!shuttingDown && !(GameRunning() && SessionWakes(token, iSeqAtStart)) && GetTickCount() - start < (DWORD)(timeout * 1000.0))
+		{
 			Sleep(250);
+			Touch(token);
+		}
 	}
 
 	std::string error;
-	picojson::value result = RunOnGameThread(name, args, error);
+	picojson::value result = RunOnGameThread(token, name, args, error);
 	if(!error.empty())
 	{
 		bIsError = true;
@@ -770,42 +988,52 @@ picojson::value ClaudeBridge::Impl::CallTool(const std::string& name, const pico
 }
 
 // Solo testing: one call per round instead of end_turn, wait, skip_human_turn, wait.
-picojson::value ClaudeBridge::Impl::AdvanceRound(const picojson::object& args, bool& bIsError)
+picojson::value ClaudeBridge::Impl::AdvanceRound(const std::string& token, const picojson::object& args, bool& bIsError)
 {
 	if(!testingMode) { bIsError = true; return picojson::value("advance_round is a testing tool: call testing_mode with enabled=true first"); }
 	std::string error;
 	int iTurnBefore = gameTurn;
-	picojson::value r = RunOnGameThread(CLAUDE_TOOL_END_TURN, args, error);
+	picojson::value r = RunOnGameThread(token, CLAUDE_TOOL_END_TURN, args, error);
 	if(!error.empty()) { bIsError = true; return picojson::value(error); }
 	DWORD start = GetTickCount();
 	const DWORD limit = (DWORD)(CLAUDE_WAIT_MAX_SECONDS * 1000.0);
-	while(!shuttingDown && myTurn && GetTickCount() - start < 5000) Sleep(100);
 	bool bSkipped = false;
+	bool bReopened = false;
+	bool bTurnEnded = false;
 	while(!shuttingDown && GetTickCount() - start < limit)
 	{
-		if(GameRunning() && myTurn) break; // the turn came back (a unit arrived with moves left) or the round is done
-		if(!bSkipped && screenHumanTurn)
+		bool bMyTurn = false;
+		int iDiploSeq = 0, iSeat = 0;
+		Flags(token, bMyTurn, iDiploSeq, iSeat);
+		if(!bTurnEnded)
+		{
+			// Give the turn a few seconds to close before watching for it to come back.
+			if(!bMyTurn || GetTickCount() - start >= 5000) bTurnEnded = true;
+		}
+		else if(GameRunning() && bMyTurn) { bReopened = true; break; } // the turn came back (a unit arrived with moves left) or the round is done
+		else if(!bSkipped && screenHumanTurn && !ClaudeBridge::Get().ScreenPlayed())
 		{
 			picojson::object none;
-			RunOnGameThread(CLAUDE_TOOL_SKIP_HUMAN_TURN, none, error);
+			RunOnGameThread(token, CLAUDE_TOOL_SKIP_HUMAN_TURN, none, error);
 			if(!error.empty()) { bIsError = true; return picojson::value(error); }
 			bSkipped = true;
 		}
-		Sleep(250);
+		Sleep(bTurnEnded ? 250 : 100);
+		Touch(token);
 	}
 	picojson::object none;
-	r = RunOnGameThread(CLAUDE_TOOL_STATUS, none, error);
+	r = RunOnGameThread(token, CLAUDE_TOOL_STATUS, none, error);
 	if(!error.empty()) { bIsError = true; return picojson::value(error); }
 	if(r.is<picojson::object>())
 	{
 		picojson::object& o = r.get<picojson::object>();
 		o["round_advanced"] = picojson::value(gameTurn > iTurnBefore);
-		o["turn_reopened"] = picojson::value(gameTurn == iTurnBefore && myTurn);
+		o["turn_reopened"] = picojson::value(gameTurn == iTurnBefore && bReopened);
 	}
 	return r;
 }
 
-picojson::value ClaudeBridge::Impl::RunOnGameThread(const std::string& tool, const picojson::object& args, std::string& error)
+picojson::value ClaudeBridge::Impl::RunOnGameThread(const std::string& token, const std::string& tool, const picojson::object& args, std::string& error)
 {
 	if(shuttingDown)
 	{
@@ -819,6 +1047,7 @@ picojson::value ClaudeBridge::Impl::RunOnGameThread(const std::string& tool, con
 	}
 
 	ClaudeJob* pJob = new ClaudeJob();
+	pJob->session = token;
 	pJob->tool = tool;
 	pJob->args = args;
 

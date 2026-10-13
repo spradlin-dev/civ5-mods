@@ -10,6 +10,7 @@ struct ClaudePopup
 {
 	int id;
 	int turn;
+	int player; // the player it was shown to (PlayerTypes)
 	std::string text;
 	std::string dialog; // InGame dialog context to close on acknowledgement; "" if a human must close it
 	bool read;
@@ -23,6 +24,22 @@ struct ClaudeIdentity
 	std::string version;
 };
 
+// One connected model: an MCP session. Several can play at once, each on its own seat.
+enum ClaudeSeatState
+{
+	CLAUDE_SEAT_SCREEN = -1,   // no seat: plays the civilization on screen
+	CLAUDE_SEAT_LOST = -2,     // held a seat before the game changed under it; must claim one again
+	CLAUDE_SEAT_UNDECIDED = -3 // new session in a game that has seats; must choose one (or the screen)
+};
+struct ClaudeSession
+{
+	std::string token;     // the Mcp-Session-Id the client sends
+	ClaudeIdentity identity;
+	int seat;              // PlayerTypes of the claimed seat, or a ClaudeSeatState
+	bool idle;             // no request for a while: its seat may be taken over, and it is not counted as playing
+	ClaudeSession() : seat(CLAUDE_SEAT_UNDECIDED), idle(false) {}
+};
+
 // A mod loaded in the current game: "Name (v N)" and its description, on one line.
 struct ClaudeModInfo
 {
@@ -30,16 +47,22 @@ struct ClaudeModInfo
 	std::string description;
 };
 
-// One line of the in-game Claude Log; category is one of the CLAUDE_LOG_ names.
+// One line of the in-game log; category is one of the CLAUDE_LOG_ names.
 struct ClaudeLogEntry
 {
 	std::string category;
 	std::string text;
+	int player;       // the civilization it was written for (PlayerTypes), or -1 for the bridge itself
+	std::string who;  // the model's label at the time, "" for the bridge
+	std::string civ;  // that civilization's name, "" for the one on screen or the bridge
+	bool teammate;    // written while that civilization was the one on screen or on its team; lines
+	                  // written as an opponent are never shown on screen, even after the model moves seats
 };
 
-// Serves MCP (JSON-RPC over HTTP) to Claude. Requests arrive on the HTTP thread;
-// anything that reads or changes game state is queued and run by Tick() on the
-// game thread, so game code never runs off its own thread.
+// Serves MCP (JSON-RPC over HTTP) to one or more models. Requests arrive on HTTP
+// threads; anything that reads or changes game state is queued and run by Tick() on
+// the game thread, so game code never runs off its own thread. Each request carries
+// its session; while a job runs, that session is the current one.
 class ClaudeBridge
 {
 public:
@@ -55,36 +78,50 @@ public:
 	// instead of failing; the bridge runs it again on a later frame, for a few seconds.
 	static void RetryLater();
 
-	// Any thread. Empty until the connected model calls set_identity; every new MCP
-	// session clears it, so a model that reconnects or replaces another names itself again.
-	ClaudeIdentity Identity();
-	void SetIdentity(const ClaudeIdentity& identity);
+	// Game thread, during a job: the session whose tool is running. Outside a job the
+	// token is "". Identity is empty until the model calls set_identity; every new MCP
+	// session starts empty, so a model that reconnects names itself again.
+	ClaudeSession Current();
+	void SetCurrentIdentity(const ClaudeIdentity& identity);
+	void SetCurrentSeat(int seat);
+	// Any thread. Every session as of now, idle ones included (see ClaudeSession::idle).
+	std::vector<ClaudeSession> Sessions();
+	// Any thread. The live (not idle) session on a seat, if any; false when nobody is.
+	bool SessionForSeat(int seat, ClaudeSession& out);
+	// Any thread. Takes a seat away from whichever session holds it (it becomes lost).
+	void UnbindSeat(int seat);
+	// Any thread. True when a live session plays the civilization on screen.
+	bool ScreenPlayed();
 
 	// Any thread. The mods loaded in this game; the in-game UI script reports them when a
 	// game loads, since only the UI's Modding API can list them.
 	std::vector<ClaudeModInfo> ActiveMods();
 	void SetActiveMods(const std::vector<ClaudeModInfo>& mods);
 
-	// Any thread. The game's settings and mods go to the model once per MCP session and
-	// per loaded game (marked when the UI reports that game's mods), in the next status;
-	// Take returns true at most once per mark.
+	// Game thread. The game's settings and mods go to each model once per MCP session and
+	// per loaded game (marked for every session when the UI reports that game's mods), in
+	// the next status; Take returns true at most once per mark, for the current session.
 	bool TakeGameBriefingDue();
 	void MarkGameBriefingDue();
 
-	// Game thread. Appends to the in-game log, inserting a separator when the turn changed.
+	// Game thread. Appends to the in-game log for the current session's civilization
+	// (LogLine) or for a given one (LogLineFor), inserting a separator when the turn changed.
+	// A named session with no civilization writes hidden lines; the bridge's own are shown.
 	void LogLine(const char* category, const std::string& text);
+	void LogLineFor(int player, const char* category, const std::string& text);
 
 	// Any thread. The returned sequence number grows with every line ever appended,
 	// so callers can detect new lines even after old ones were trimmed.
 	int GetLog(std::vector<ClaudeLogEntry>& out);
-	// Any thread. ClaudeLogVisibleOnScreen as of the last Tick.
-	bool LogVisibleOnScreen() const;
+	// Any thread. How many live sessions play an opponent of the player on screen, as of the last Tick.
+	int HiddenPlayers() const;
 
-	// Records a game popup; it is described and logged on the next Tick. bOnScreen
-	// means the game's dialog is open: it is Claude's only when Claude's seat is the
-	// player on screen, and is then closed once Claude has read it.
+	// Records a popup; it is described and logged on the next Tick. bOnScreen means the
+	// game's dialog is open for the player on screen: it is a model's only when a session
+	// plays that civilization, and is then closed once the model has read it. Off-screen
+	// popups name the seat they are for.
 	// UI thread (Lua) for on-screen popups, game thread otherwise.
-	void NotePopup(int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text, bool bOnScreen);
+	void NotePopup(int player, int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text, bool bOnScreen);
 
 	// UI thread (Lua). Dialog names whose messages were acknowledged since the last
 	// call, one per line; the Lua side closes them.
@@ -95,11 +132,11 @@ public:
 	void SetTestingMode(bool bOn);
 	bool TestingMode() const;
 
-	// Game thread.
-	std::vector<ClaudePopup> GetPopupsSince(int iTurn);
-	int CountUnread();
+	// Game thread. Popups shown to one player.
+	std::vector<ClaudePopup> GetPopupsSince(int player, int iTurn);
+	int CountUnread(int player);
 	// ids NULL = all. Returns how many were newly marked read.
-	int Acknowledge(const std::vector<int>* ids);
+	int Acknowledge(int player, const std::vector<int>* ids);
 
 private:
 	ClaudeBridge();

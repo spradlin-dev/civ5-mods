@@ -152,10 +152,10 @@ namespace
 		return events;
 	}
 
-	JArr BriefingGameMessages(int iSince)
+	JArr BriefingGameMessages(CvPlayer* me, int iSince)
 	{
 		JArr list;
-		std::vector<ClaudePopup> seen = ClaudeBridge::Get().GetPopupsSince(iSince);
+		std::vector<ClaudePopup> seen = ClaudeBridge::Get().GetPopupsSince(me->GetID(), iSince);
 		for(size_t i = 0; i < seen.size(); ++i)
 		{
 			JObj p;
@@ -362,8 +362,8 @@ CLAUDE_TOOL(ToolBriefing)
 	o["end_turn_blocking"] = J(BlockingName(EndTurnBlocking(me)));
 	o["events_since_turn"] = J(iSince);
 	o["events"] = JVal(BriefingEvents(me, iSince));
-	o["game_messages"] = JVal(BriefingGameMessages(iSince));
-	int iUnread = ClaudeBridge::Get().CountUnread();
+	o["game_messages"] = JVal(BriefingGameMessages(me, iSince));
+	int iUnread = ClaudeBridge::Get().CountUnread(me->GetID());
 	if(iUnread > 0) o["unread_messages"] = J(ClaudeFormat("%d - read them above and call acknowledge_messages before acting", iUnread));
 	BriefingUnitChanges(me, iTurn, o);
 	BriefingDecisions(me, o);

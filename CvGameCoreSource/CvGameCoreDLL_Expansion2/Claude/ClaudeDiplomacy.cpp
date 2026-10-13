@@ -27,6 +27,7 @@ namespace
 	{
 		int id;
 		int turn;
+		PlayerTypes to;   // the seat it is for
 		PlayerTypes from;
 		DiploUIStateTypes state;
 		std::string message;
@@ -37,15 +38,10 @@ namespace
 	std::vector<DiploRequest> s_requests;
 	int s_seq = 0;
 
-	bool IsOffScreenSeat(PlayerTypes e)
-	{
-		return e != NO_PLAYER && e == ClaudeSeat() && !ClaudeSeatOnScreen();
-	}
-
 	// Testing only: a leader screen aimed at the idle human would block the game until someone clicks it.
 	bool DropForIdleHuman(PlayerTypes eTo)
 	{
-		return ClaudeBridge::Get().TestingMode() && !ClaudeSeatOnScreen() && eTo == GC.getGame().getActivePlayer();
+		return ClaudeBridge::Get().TestingMode() && !ClaudeBridge::Get().ScreenPlayed() && eTo == GC.getGame().getActivePlayer();
 	}
 
 	const char* StateName(DiploUIStateTypes e)
@@ -233,11 +229,12 @@ namespace
 			if(s_requests[i].id == id) { s_requests.erase(s_requests.begin() + i); return; }
 	}
 
-	void Record(PlayerTypes eFrom, DiploUIStateTypes eState, const char* szMessage, int iExtra, const CvDeal* pDeal)
+	void Record(PlayerTypes eTo, PlayerTypes eFrom, DiploUIStateTypes eState, const char* szMessage, int iExtra, const CvDeal* pDeal)
 	{
 		DiploRequest r;
 		r.id = ++s_seq;
 		r.turn = GC.getGame().getGameTurn();
+		r.to = eTo;
 		r.from = eFrom;
 		r.state = eState;
 		r.message = szMessage ? szMessage : "";
@@ -245,7 +242,7 @@ namespace
 		r.hasDeal = (pDeal != NULL);
 		if(pDeal) r.deal = *pDeal;
 		s_requests.push_back(r);
-		ClaudeBridge::Get().LogLine(CLAUDE_LOG_DIPLOMACY, ClaudeFormat("Diplomacy #%d from %s (%s): ", r.id, CivName(eFrom).c_str(), StateName(eState)) + r.message);
+		ClaudeBridge::Get().LogLineFor(eTo, CLAUDE_LOG_DIPLOMACY, ClaudeFormat("Diplomacy #%d from %s (%s): ", r.id, CivName(eFrom).c_str(), StateName(eState)) + r.message);
 	}
 
 	// ------------------------------------------------------------- deal building
@@ -439,31 +436,34 @@ namespace
 
 void ClaudeNoteDealResolved(PlayerTypes eFrom, PlayerTypes eTo, PlayerTypes eActBy, bool bAccepted, bool bStillValid)
 {
-	PlayerTypes eSeat = ClaudeSeat();
-	if(eSeat == NO_PLAYER || ClaudeSeatOnScreen() || (eFrom != eSeat && eTo != eSeat)) return;
-	if(eActBy == eSeat) return; // the tool that acted already reported the result
-	PlayerTypes eOther = (eFrom == eSeat) ? eTo : eFrom;
-	std::string what = (eFrom == eSeat) ? "your offer" : "their offer";
-	std::string text;
-	if(!bStillValid) text = CivName(eOther) + ": " + what + " expired; something in it is no longer available";
-	else if(bAccepted) text = CivName(eOther) + " accepted " + what + "; the deal is in force";
-	else text = CivName(eOther) + " declined " + what;
-	ClaudeBridge::Get().NotePopup(CLAUDE_POPUP_TEXT, 0, 0, 0, false, text, false);
+	PlayerTypes ends[2] = { eFrom, eTo };
+	for(int i = 0; i < 2; ++i)
+	{
+		PlayerTypes eSeat = ends[i];
+		if(!ClaudeIsSeat(eSeat) || eActBy == eSeat) continue; // the tool that acted already reported the result
+		PlayerTypes eOther = (eFrom == eSeat) ? eTo : eFrom;
+		std::string what = (eFrom == eSeat) ? "your offer" : "their offer";
+		std::string text;
+		if(!bStillValid) text = CivName(eOther) + ": " + what + " expired; something in it is no longer available";
+		else if(bAccepted) text = CivName(eOther) + " accepted " + what + "; the deal is in force";
+		else text = CivName(eOther) + " declined " + what;
+		ClaudeBridge::Get().NotePopup(eSeat, CLAUDE_POPUP_TEXT, 0, 0, 0, false, text, false);
+	}
 }
 
 bool ClaudeInterceptRequest(PlayerTypes eFrom, PlayerTypes eTo, DiploUIStateTypes eState, const char* szMessage, int iExtraGameData)
 {
 	if(DropForIdleHuman(eTo)) return true;
-	if(!IsOffScreenSeat(eTo)) return false;
-	Record(eFrom, eState, szMessage, iExtraGameData, NULL);
+	if(!ClaudeIsSeat(eTo)) return false;
+	Record(eTo, eFrom, eState, szMessage, iExtraGameData, NULL);
 	return true;
 }
 
 bool ClaudeInterceptDealRequest(PlayerTypes eFrom, PlayerTypes eTo, const CvDeal* pDeal, DiploUIStateTypes eState, const char* szMessage)
 {
 	if(DropForIdleHuman(eTo)) return true;
-	if(!IsOffScreenSeat(eTo)) return false;
-	Record(eFrom, eState, szMessage, -1, pDeal);
+	if(!ClaudeIsSeat(eTo)) return false;
+	Record(eTo, eFrom, eState, szMessage, -1, pDeal);
 	return true;
 }
 
@@ -471,10 +471,9 @@ namespace
 {
 	// Humans with a deal waiting between them and the seat (the game keeps one per direction).
 	// list NULL just counts the ones waiting for the seat's answer.
-	int ProposedDealsWithSeat(JArr* list)
+	int ProposedDealsWithSeat(PlayerTypes eSeat, JArr* list)
 	{
 		int n = 0;
-		PlayerTypes eSeat = ClaudeSeat();
 		if(eSeat == NO_PLAYER) return 0;
 		CvGameDeals* pDeals = GC.getGame().GetGameDeals();
 		for(int i = 0; i < MAX_MAJOR_CIVS; ++i)
@@ -508,24 +507,44 @@ namespace
 	}
 }
 
+namespace
+{
+	int RequestsFor(PlayerTypes e)
+	{
+		int n = 0;
+		for(size_t i = 0; i < s_requests.size(); ++i)
+			if(s_requests[i].to == e) ++n;
+		return n;
+	}
+}
+
 picojson::value ClaudeDiploRequestsJson()
 {
+	PlayerTypes eMe = ClaudeSeat();
 	JArr list;
-	for(size_t i = 0; i < s_requests.size(); ++i) list.push_back(RequestJson(s_requests[i]));
-	ProposedDealsWithSeat(&list);
+	for(size_t i = 0; i < s_requests.size(); ++i)
+		if(s_requests[i].to == eMe) list.push_back(RequestJson(s_requests[i]));
+	ProposedDealsWithSeat(eMe, &list);
 	return JVal(list);
+}
+
+int ClaudeCountDiploRequestsFor(PlayerTypes e)
+{
+	return RequestsFor(e) + ProposedDealsWithSeat(e, NULL);
 }
 
 int ClaudeCountDiploRequests()
 {
-	return (int)s_requests.size() + ProposedDealsWithSeat(NULL);
+	return ClaudeCountDiploRequestsFor(ClaudeSeat());
 }
 
 std::string ClaudeDiploWaitingNote()
 {
+	PlayerTypes eMe = ClaudeSeat();
+	int n = RequestsFor(eMe);
 	std::string note;
-	if(!s_requests.empty()) note = ClaudeFormat("%d request(s) from other leaders await your answer on your turn (diplomacy, then respond_to_request)", (int)s_requests.size());
-	if(ProposedDealsWithSeat(NULL) > 0) note += std::string(note.empty() ? "" : "; ") + "a human's deal offer awaits your answer (diplomacy, then answer_deal)";
+	if(n > 0) note = ClaudeFormat("%d request(s) from other leaders await your answer on your turn (diplomacy, then respond_to_request)", n);
+	if(ProposedDealsWithSeat(eMe, NULL) > 0) note += std::string(note.empty() ? "" : "; ") + "a human's deal offer awaits your answer (diplomacy, then answer_deal)";
 	return note;
 }
 
@@ -560,6 +579,12 @@ void ClaudeResetDiploRequests()
 {
 	s_requests.clear();
 	s_seq = 0;
+}
+
+void ClaudeDropDiploRequestsFor(PlayerTypes e)
+{
+	for(size_t i = s_requests.size(); i-- > 0;)
+		if(s_requests[i].to == e) s_requests.erase(s_requests.begin() + i);
 }
 
 // ------------------------------------------------------------- tools
@@ -606,7 +631,7 @@ CLAUDE_TOOL(ToolRespondToRequest)
 	if(!RequireInt(args, "id", id, err)) return JVal();
 	std::string choice = ArgStr(args, "choice");
 	DiploRequest* r = FindRequest(id);
-	if(!r) { err = ClaudeFormat("no open request #%d; see diplomacy.requests", id); return JVal(); }
+	if(!r || r->to != me->GetID()) { err = ClaudeFormat("no open request #%d; see diplomacy.requests", id); return JVal(); }
 	if(!GET_PLAYER(r->from).isAlive()) { err = CivName(r->from) + " is gone; the request no longer matters"; EraseRequest(r->id); return JVal(); }
 	CvDiplomacyAI* theirAI = GET_PLAYER(r->from).GetDiplomacyAI();
 	JObj o;
