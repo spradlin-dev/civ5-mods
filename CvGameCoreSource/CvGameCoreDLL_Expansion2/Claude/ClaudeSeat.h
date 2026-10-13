@@ -62,6 +62,11 @@ void ClaudeBindSeatLabel(PlayerTypes e, const std::string& label);
 // Game thread. True when e is the player on screen or on its team (also when nobody is on screen).
 bool ClaudeOnScreenTeam(PlayerTypes e);
 
+// Game thread, every frame. When the player on screen has been eliminated while a model
+// still plays, the screen becomes an observer so the game goes on and can be watched.
+// True while that is so: the game must not end for the human's defeat.
+bool ClaudeKeepWatching();
+
 // Game thread. Records a popup the game only shows to the player on screen, when
 // it is for a seat (or that seat's team). Same arguments as the game's popup info.
 void ClaudeNoteSeatPopup(PlayerTypes ePlayer, int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text);

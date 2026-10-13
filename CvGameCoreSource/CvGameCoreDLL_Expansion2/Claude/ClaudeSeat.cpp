@@ -178,6 +178,23 @@ bool ClaudeOnScreenTeam(PlayerTypes e)
 	return eActive == NO_PLAYER || GET_PLAYER(e).getTeam() == GET_PLAYER(eActive).getTeam();
 }
 
+bool ClaudeKeepWatching()
+{
+	PlayerTypes eActive = GC.getGame().getActivePlayer();
+	if(eActive == NO_PLAYER) return false;
+	if(CvPreGame::slotStatus(eActive) == SS_OBSERVER) return true;
+	if(GET_PLAYER(eActive).isAlive() || !GET_PLAYER(eActive).isHuman()) return false;
+	bool bSeatAlive = false;
+	for(int i = 0; i < MAX_MAJOR_CIVS && !bSeatAlive; ++i)
+		bSeatAlive = ClaudeIsSeat((PlayerTypes)i) && GET_PLAYER((PlayerTypes)i).isAlive();
+	if(!bSeatAlive) return false;
+	// The game's own AI autoplay watches this way: the dead slot becomes an observer, keeps
+	// its team's sight, and its turns are ended for it.
+	CvPreGame::setSlotStatus(eActive, SS_OBSERVER);
+	ClaudeBridge::Get().LogLineFor(-1, CLAUDE_LOG_ALWAYS, "Your civilization has been eliminated. The game goes on so the AI players can finish it; you can watch to the end.");
+	return true;
+}
+
 std::string ClaudeNewUuid()
 {
 	GUID g;
