@@ -460,7 +460,8 @@ namespace ClaudeTool
 		out.unit = NULL;
 		out.city = NULL;
 		out.ranged = u->isRanged();
-		if(u->GetBaseCombatStrength() <= 0) { why = "that unit cannot attack"; return false; }
+		// Aircraft have no melee strength at all; their ranged strength is what attacks.
+		if(!u->IsCanAttack()) { why = "that unit cannot attack"; return false; }
 		if(!p->isVisible(me->getTeam())) { why = "target tile is not visible"; return false; }
 		if(out.ranged)
 		{
