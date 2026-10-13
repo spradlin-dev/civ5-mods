@@ -249,6 +249,14 @@ namespace
 
 	int StandardDuration() { return GC.getGame().GetDealDuration(); }
 
+	void NotifyHumanOfDeal(CvPlayer* from, CvPlayer* human)
+	{
+		CvNotifications* pN = human->GetNotifications();
+		if(!pN) return;
+		std::string summary = CivName(from->GetID()) + " proposes a deal";
+		pN->Add(NOTIFICATION_PLAYER_DEAL_RECEIVED, (summary + ": open it from the Diplomacy notification to accept or decline").c_str(), summary.c_str(), from->GetID(), -1, -1);
+	}
+
 	// The same path two humans use in multiplayer: the deal waits in the game's proposed
 	// deals and the other player gets a Diplomacy notification that opens their deal screen.
 	bool OfferDealToHuman(CvPlayer* me, CvPlayer* other, CvDeal& deal, JObj& out, std::string& err)
@@ -256,12 +264,7 @@ namespace
 		CvGameDeals* pDeals = GC.getGame().GetGameDeals();
 		if(pDeals->ProposedDealExists(me->GetID(), other->GetID())) { err = "they already have an offer from you waiting; wait for their answer"; return false; }
 		pDeals->AddProposedDeal(deal);
-		CvNotifications* pN = other->GetNotifications();
-		if(pN)
-		{
-			std::string summary = CivName(me->GetID()) + " proposes a deal";
-			pN->Add(NOTIFICATION_PLAYER_DEAL_RECEIVED, (summary + ": open it from the Diplomacy notification to accept or decline").c_str(), summary.c_str(), me->GetID(), -1, -1);
-		}
+		NotifyHumanOfDeal(me, other);
 		out["ok"] = J(true);
 		out["proposed_to_human"] = J(CivName(other->GetID()));
 		out["next"] = J("their answer arrives as a game message; the deal stays open until they decide");
@@ -587,6 +590,20 @@ void ClaudeDropDiploRequestsFor(PlayerTypes e)
 		if(s_requests[i].to == e) s_requests.erase(s_requests.begin() + i);
 }
 
+void ClaudeRemindHumanOfDeals()
+{
+	static int s_lastTurn = -1;
+	PlayerTypes eHuman = GC.getGame().getActivePlayer();
+	if(eHuman == NO_PLAYER || !GET_PLAYER(eHuman).isHuman() || !GET_PLAYER(eHuman).isTurnActive()) return;
+	int iTurn = GC.getGame().getGameTurn();
+	if(iTurn == s_lastTurn) return;
+	s_lastTurn = iTurn;
+	CvGameDeals* pDeals = GC.getGame().GetGameDeals();
+	for(int i = 0; i < MAX_MAJOR_CIVS; ++i)
+		if(ClaudeIsSeat((PlayerTypes)i) && pDeals->ProposedDealExists((PlayerTypes)i, eHuman))
+			NotifyHumanOfDeal(&GET_PLAYER((PlayerTypes)i), &GET_PLAYER(eHuman));
+}
+
 // ------------------------------------------------------------- tools
 
 CLAUDE_TOOL(ToolDiplomacy)
@@ -720,7 +737,7 @@ CLAUDE_TOOL(ToolMakePeace)
 	if(!other) return JVal();
 	CvTeam& mine = GET_TEAM(me->getTeam());
 	if(!mine.isAtWar(other->getTeam())) { err = "you are not at war with them"; return JVal(); }
-	if(!mine.canChangeWarPeace(other->getTeam())) { err = "peace is not possible yet (locked into war)"; return JVal(); }
+	if(!mine.canChangeWarPeace(other->getTeam())) { err = "peace is not possible in this game between you (permanent war or a game option)"; return JVal(); }
 	int dur = GC.getGame().getGameSpeedInfo().getPeaceDealDuration();
 	CvDeal deal(me->GetID(), other->GetID());
 	bool bPreview = ArgBool(args, "preview_only", false);

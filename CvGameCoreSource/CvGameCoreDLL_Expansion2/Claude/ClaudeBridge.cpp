@@ -527,6 +527,7 @@ void ClaudeBridge::Impl::Tick()
 	if(CvPreGame::mapRandomSeed() != gameSeed || iTurn < gameTurn) ResetForNewGame();
 	gameTurn = iTurn;
 	UpdateSessions();
+	ClaudeRemindHumanOfDeals();
 	DrainPopups();
 
 	for(;;)
@@ -653,9 +654,10 @@ namespace
 
 void ClaudeBridge::RetryLater() { s_retryRequested = true; }
 
-// The log lines for a call are written after it ran, for the civilization the session
-// played before the call or, when it had none, the one it plays after: a claim of an
-// opponent civilization is then hidden with the rest of that civilization's lines.
+// A call from a session with no civilization yet (take_seat) is logged after it ran, for
+// the civilization it plays then: a claim of an opponent civilization is hidden with the
+// rest of that civilization's lines. Other calls are logged before they run, so their
+// line comes before anything the call causes.
 bool ClaudeBridge::Impl::RunJob(ClaudeJob* pJob)
 {
 	const ClaudeToolDef* pTool = ClaudeFindTool(pJob->tool);
@@ -673,7 +675,9 @@ bool ClaudeBridge::Impl::RunJob(ClaudeJob* pJob)
 	bool bFirstTry = !pJob->retrying;
 	bool bLogged = pTool->logAs != LOG_NONE;
 	const char* szCategory = bLogged ? ClaudeLogCategory(*pTool, pJob->args) : "";
-	PlayerTypes ePlayerBefore = ClaudePlayerOf(ClaudeBridge::Get().Current());
+	ClaudeSession before = ClaudeBridge::Get().Current();
+	PlayerTypes ePlayerBefore = ClaudePlayerOf(before);
+	if(bLogged && bFirstTry && ePlayerBefore != NO_PLAYER) Append((int)ePlayerBefore, ClaudeIdentityLabel(before.identity), szCategory, ClaudeDescribeCall(*pTool, pJob->args));
 	ClaudeCrashSetContext((pJob->tool + " " + picojson::value(pJob->args).serialize()).c_str());
 	s_retryRequested = false;
 	pJob->error.clear();
@@ -694,7 +698,7 @@ bool ClaudeBridge::Impl::RunJob(ClaudeJob* pJob)
 	ClaudeSession s = ClaudeBridge::Get().Current();
 	int player = (ePlayerBefore != NO_PLAYER) ? (int)ePlayerBefore : (int)ClaudePlayerOf(s);
 	std::string who = ClaudeIdentityLabel(s.identity);
-	if(bFirstTry) Append(player, who, szCategory, ClaudeDescribeCall(*pTool, pJob->args));
+	if(bFirstTry && ePlayerBefore == NO_PLAYER) Append(player, who, szCategory, ClaudeDescribeCall(*pTool, pJob->args));
 	if(bRetry) return true;
 	std::string outcome = pJob->error.empty() ? ClaudeDescribeResult(*pTool, pJob->result) : "Refused: " + pJob->error;
 	if(!outcome.empty()) Append(player, who, szCategory, "    " + outcome);

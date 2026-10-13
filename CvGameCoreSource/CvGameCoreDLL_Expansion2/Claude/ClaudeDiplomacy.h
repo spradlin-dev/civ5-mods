@@ -22,6 +22,11 @@ int ClaudeCountDiploRequests();
 int ClaudeCountDiploRequestsFor(PlayerTypes e);
 // Forgets the requests waiting for a civilization (its seat was given back to the game's AI).
 void ClaudeDropDiploRequestsFor(PlayerTypes e);
+
+// Game thread, every frame. A deal a seat proposed to the human on screen is announced with a
+// notification that the game drops at the end of the human's turn, which Auto End Turn
+// reaches at once; so it is announced again at the start of each of their turns until answered.
+void ClaudeRemindHumanOfDeals();
 void ClaudeResetDiploRequests();
 // For status: what awaits the seat's answer; empty when nothing does.
 std::string ClaudeDiploWaitingNote();
