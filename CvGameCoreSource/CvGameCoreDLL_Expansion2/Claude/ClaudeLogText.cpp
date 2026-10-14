@@ -187,7 +187,7 @@ const char* ClaudeLogCategory(const ClaudeToolDef& tool, const JObj& args)
 std::string ClaudeDescribeCall(const ClaudeToolDef& tool, const JObj& args)
 {
 	const std::string name = tool.name;
-	if(name == "move_unit") return UnitText(args) + " moves to " + PlotText(args);
+	if(name == "move_unit") return UnitText(args) + " moves to " + PlotText(args) + (ArgBool(args, "preview_only", false) ? " (preview only)" : "");
 	if(name == "attack") return UnitText(args) + " attacks " + TargetText(args) + (ArgBool(args, "preview_only", false) ? " (preview only)" : "");
 	if(name == "city_attack") return CityText(args, "city_id") + " bombards " + TargetText(args);
 	if(name == "unit_action")
@@ -220,6 +220,8 @@ std::string ClaudeDescribeResult(const ClaudeToolDef& tool, const JVal& result)
 	const JObj& r = result.get<JObj>();
 	const std::string name = tool.name;
 	if(name == "set_identity") return "now playing: " + ArgStr(r, "playing_as");
+	if(name == "move_unit" && ArgBool(r, "previewed_only", false))
+		return ClaudeFormat("path found, %d turns", ArgInt(r, "turns", 0));
 	if(name == "move_unit" && !ArgBool(r, "arrived", true))
 		return ClaudeFormat("on the way, about %d turns in all", ArgInt(r, "estimated_turns_total", 0));
 	if(name != "attack" && name != "city_attack") return "";
