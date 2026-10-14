@@ -88,11 +88,11 @@ protected:
 	static int lGetNumHumanPlayers(lua_State* L);
 	static int lGetNumSequentialHumans(lua_State* L);
 	static int lGetGameTurn(lua_State* L);
-	static int lGetClaudeLog(lua_State* L);
-	static int lGetClaudeIdentity(lua_State* L);
-	static int lClaudeNotePopup(lua_State* L);
-	static int lClaudeSetActiveMods(lua_State* L);
-	static int lClaudeDialogsToClose(lua_State* L);
+	static int lGetLLMLog(lua_State* L);
+	static int lGetLLMIdentity(lua_State* L);
+	static int lLLMNotePopup(lua_State* L);
+	static int lLLMSetActiveMods(lua_State* L);
+	static int lLLMDialogsToClose(lua_State* L);
 	static int lSetGameTurn(lua_State* L);
 	static int lGetTurnYear(lua_State* L);
 	static int lGetGameTurnYear(lua_State* L);

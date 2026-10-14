@@ -98,11 +98,11 @@ void CvLuaGame::RegisterMembers(lua_State* L)
 	Method(GetNumHumanPlayers);
 	Method(GetNumSequentialHumans);
 	Method(GetGameTurn);
-	Method(GetClaudeLog);
-	Method(GetClaudeIdentity);
-	Method(ClaudeNotePopup);
-	Method(ClaudeSetActiveMods);
-	Method(ClaudeDialogsToClose);
+	Method(GetLLMLog);
+	Method(GetLLMIdentity);
+	Method(LLMNotePopup);
+	Method(LLMSetActiveMods);
+	Method(LLMDialogsToClose);
 	Method(SetGameTurn);
 	Method(GetTurnYear);
 	Method(GetGameTurnYear);
@@ -714,10 +714,10 @@ int CvLuaGame::lGetGameTurn(lua_State* L)
 	return BasicLuaMethod(L, &CvGame::getGameTurn);
 }
 //------------------------------------------------------------------------------
-//int, table, int GetClaudeLog(); the table lists { Category, Text, Who, Civ } entries, oldest first, then how many AI players are hidden.
+//int, table, int GetLLMLog(); the table lists { Category, Text, Who, Civ } entries, oldest first, then how many AI players are hidden.
 // seq, the lines written for the player on screen or a teammate, and how many
 // connected models play an opponent (whose lines never reach the screen).
-int CvLuaGame::lGetClaudeLog(lua_State* L)
+int CvLuaGame::lGetLLMLog(lua_State* L)
 {
 	std::vector<ClaudeLogEntry> entries;
 	int seq = ClaudeBridge::Get().GetLog(entries);
@@ -742,8 +742,8 @@ int CvLuaGame::lGetClaudeLog(lua_State* L)
 	return 3;
 }
 //------------------------------------------------------------------------------
-//int, string, string GetClaudeIdentity(); how many models have named themselves, then the model and label when exactly one has.
-int CvLuaGame::lGetClaudeIdentity(lua_State* L)
+//int, string, string GetLLMIdentity(); how many models have named themselves, then the model and label when exactly one has.
+int CvLuaGame::lGetLLMIdentity(lua_State* L)
 {
 	std::vector<ClaudeSession> sessions = ClaudeBridge::Get().Sessions();
 	int iNamed = 0;
@@ -760,8 +760,8 @@ int CvLuaGame::lGetClaudeIdentity(lua_State* L)
 	return 3;
 }
 //------------------------------------------------------------------------------
-//void ClaudeSetActiveMods(string mods); one mod per line, "name<\t>description".
-int CvLuaGame::lClaudeSetActiveMods(lua_State* L)
+//void LLMSetActiveMods(string mods); one mod per line, "name<\t>description".
+int CvLuaGame::lLLMSetActiveMods(lua_State* L)
 {
 	const char* szMods = lua_tostring(L, 1);
 	std::vector<ClaudeModInfo> mods;
@@ -783,8 +783,8 @@ int CvLuaGame::lClaudeSetActiveMods(lua_State* L)
 	return 0;
 }
 //------------------------------------------------------------------------------
-//void ClaudeNotePopup(int type, int data1, int data2, int data3, bool option1, string text);
-int CvLuaGame::lClaudeNotePopup(lua_State* L)
+//void LLMNotePopup(int type, int data1, int data2, int data3, bool option1, string text);
+int CvLuaGame::lLLMNotePopup(lua_State* L)
 {
 	if(!lua_isnumber(L, 1)) return 0;
 	const int iType = lua_tointeger(L, 1);
@@ -797,8 +797,8 @@ int CvLuaGame::lClaudeNotePopup(lua_State* L)
 	return 0;
 }
 //------------------------------------------------------------------------------
-//string ClaudeDialogsToClose();
-int CvLuaGame::lClaudeDialogsToClose(lua_State* L)
+//string LLMDialogsToClose();
+int CvLuaGame::lLLMDialogsToClose(lua_State* L)
 {
 	std::string names = ClaudeBridge::Get().TakeDialogsToClose();
 	lua_pushlstring(L, names.data(), names.size());

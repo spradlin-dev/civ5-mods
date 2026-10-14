@@ -4,3 +4,7 @@ CvGameCoreSource/BuildTemp/
 *.suo
 *.user
 deployed-symbols/
+Build/
+Packages/
+mod/CvGameCore_Expansion2.dll
+*.civ5suo

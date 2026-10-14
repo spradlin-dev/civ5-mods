@@ -1,6 +1,6 @@
--- Local MCP Server DLL UI add-in: the log popup (Game.GetClaudeLog) and popup capture.
--- Every game popup is reported to the DLL (Game.ClaudeNotePopup). It stays open
--- until Claude acknowledges it; the DLL then names the dialog in Game.ClaudeDialogsToClose.
+-- Local MCP Server DLL UI add-in: the log popup (Game.GetLLMLog) and popup capture.
+-- Every game popup is reported to the DLL (Game.LLMNotePopup). It stays open
+-- until the model acknowledges it; the DLL then names the dialog in Game.LLMDialogsToClose.
 include("InstanceManager");
 
 local MAX_LINES_SHOWN = 400;
@@ -36,7 +36,7 @@ local g_IdentityLabel = nil;
 -- A connected model names itself (set_identity), e.g. Claude / Opus / 5.5. The button
 -- carries that name while exactly one model has; "AI" otherwise.
 local function UpdateIdentity()
-	local count, model, label = Game.GetClaudeIdentity();
+	local count, model, label = Game.GetLLMIdentity();
 	if count ~= 1 then
 		label = (count > 1) and string.format("%d AI players", count) or "";
 	end
@@ -75,7 +75,7 @@ local function WriterPrefix(entries)
 end
 
 local function Refresh(bToBottom)
-	local seq, entries, hidden = Game.GetClaudeLog();
+	local seq, entries, hidden = Game.GetLLMLog();
 	if seq == g_LastSeq and hidden == g_LastHidden then
 		return;
 	end
@@ -186,18 +186,18 @@ local function OnGamePopup(popupInfo)
 			text = message;
 		end
 	end
-	Game.ClaudeNotePopup(popupInfo.Type, popupInfo.Data1 or -1, popupInfo.Data2 or -1, popupInfo.Data3 or -1, popupInfo.Option1 == true, text);
+	Game.LLMNotePopup(popupInfo.Type, popupInfo.Data1 or -1, popupInfo.Data2 or -1, popupInfo.Data3 or -1, popupInfo.Option1 == true, text);
 end
 Events.SerialEventGameMessagePopup.Add(OnGamePopup);
 
 local function CollectAcknowledged()
-	local names = Game.ClaudeDialogsToClose();
+	local names = Game.LLMDialogsToClose();
 	if names == nil or names == "" then
 		return;
 	end
 	for name in string.gmatch(names, "[^\n]+") do
 		if #g_PendingDismiss >= 50 then
-			print("ClaudeLog: too many dialogs waiting to be closed; dropping " .. g_PendingDismiss[1].name);
+			print("LLMLog: too many dialogs waiting to be closed; dropping " .. g_PendingDismiss[1].name);
 			table.remove(g_PendingDismiss, 1);
 		end
 		table.insert(g_PendingDismiss, { name = name, waited = 0 });
@@ -217,14 +217,14 @@ local function DismissPending(fDeltaTime)
 	for _, pending in ipairs(g_PendingDismiss) do
 		local control = ContextPtr:LookUpControl("/InGame/" .. pending.name);
 		if control == nil then
-			print("ClaudeLog: no dialog named " .. pending.name);
+			print("LLMLog: no dialog named " .. pending.name);
 		elseif not control:IsHidden() and not closed[pending.name] then
 			UIManager:DequeuePopup(control);
 			closed[pending.name] = true;
 		else
 			pending.waited = pending.waited + fDeltaTime;
 			if pending.waited > MAX_DISMISS_WAIT_SECONDS then
-				print("ClaudeLog: " .. pending.name .. " was not shown within " .. MAX_DISMISS_WAIT_SECONDS .. " s; dropping it");
+				print("LLMLog: " .. pending.name .. " was not shown within " .. MAX_DISMISS_WAIT_SECONDS .. " s; dropping it");
 			else
 				table.insert(remaining, pending);
 			end
@@ -249,7 +249,7 @@ local function ReportActiveMods()
 		end
 		table.insert(mods, string.format("%s (v %d)\t%s", (name:gsub("%s+", " ")), v.Version, description));
 	end
-	Game.ClaudeSetActiveMods(table.concat(mods, "\n"));
+	Game.LLMSetActiveMods(table.concat(mods, "\n"));
 end
 ReportActiveMods();
 

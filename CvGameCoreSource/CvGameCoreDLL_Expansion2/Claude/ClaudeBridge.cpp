@@ -456,10 +456,10 @@ void ClaudeBridge::Impl::TryStart()
 	pServer = new ClaudeHttpServer();
 	if(pServer->Start(CLAUDE_PORT, &Impl::HttpHandler))
 	{
-		DiagLog(ClaudeFormat("Claude bridge listening on http://127.0.0.1:%d/mcp", CLAUDE_PORT));
+		DiagLog(ClaudeFormat("MCP bridge listening on http://127.0.0.1:%d/mcp", CLAUDE_PORT));
 		return;
 	}
-	std::string msg = "Claude bridge FAILED to start: " + pServer->lastError();
+	std::string msg = "MCP bridge FAILED to start: " + pServer->lastError();
 	DiagLog(msg);
 	if(!startFailureShown)
 	{
