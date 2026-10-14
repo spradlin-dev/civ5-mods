@@ -338,6 +338,12 @@ CLAUDE_TOOL(ToolTradeRouteOptions)
 	JObj o;
 	o["from"] = J(origin ? origin->getName().c_str() : "?");
 	o["routes_remaining"] = J(me->GetTrade()->GetNumTradeRoutesRemaining(false));
+	o["routes_possible"] = J((int)me->GetTrade()->GetNumTradeRoutesPossible());
+	int iTradeUnits = 0, iLoop = 0;
+	for(CvUnit* t = me->firstUnit(&iLoop); t; t = me->nextUnit(&iLoop))
+		if(t->isTrade()) ++iTradeUnits;
+	o["trade_units_owned"] = J(iTradeUnits);
+	o["routes_note"] = J("every caravan and cargo ship you own takes one route slot, idle or not, as does each one being built; disband an idle one to free a slot");
 	int iRange = origin ? me->GetTrade()->GetTradeRouteRange(u->getDomainType(), origin) : 0;
 	if(origin) o["range"] = J(iRange);
 	JArr dests;

@@ -27,11 +27,8 @@ namespace
 		if(c->IsResistance() || c->IsRazing()) return "the city is in resistance or being razed";
 		if(eUnit != NO_UNIT && !c->CanPlaceUnitHere(eUnit))
 			return "another unit of the same kind already stands on the city tile; move it out first (a city tile holds one military and one civilian unit)";
-		CvString why;
-		if(eUnit != NO_UNIT && !c->canTrain(eUnit, false, false, false, true, &why))
-			return "the city cannot train it" + (why.IsEmpty() ? std::string() : ": " + std::string(why.c_str()));
-		if(eBuilding != NO_BUILDING && !c->canConstruct(eBuilding, false, false, false, &why))
-			return "the city cannot build it" + (why.IsEmpty() ? std::string() : ": " + std::string(why.c_str()));
+		std::string why = (eUnit != NO_UNIT) ? TrainRefusal(c, eUnit, true) : BuildRefusal(c, eBuilding, true);
+		if(!why.empty()) return (eUnit != NO_UNIT ? "the city cannot train it: " : "the city cannot build it: ") + why;
 		if(bFaith)
 		{
 			int iCost = (eUnit != NO_UNIT) ? c->GetFaithPurchaseCost(eUnit, true) : c->GetFaithPurchaseCost(eBuilding);

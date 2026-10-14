@@ -145,7 +145,8 @@ CLAUDE_TOOL(ToolUpgradeUnit)
 	if(!me) return JVal();
 	CvUnit* u = RequireUnit(me, args, err);
 	if(!u) return JVal();
-	if(!u->CanUpgradeRightNow(false)) { err = "that unit cannot upgrade now (no upgrade available, not enough gold, wrong location, or no moves left)"; return JVal(); }
+	std::string why = UpgradeRefusal(u);
+	if(!why.empty()) { err = "that unit cannot upgrade now: " + why; return JVal(); }
 	int iGoldBefore = me->GetTreasury()->GetGold();
 	CvUnit* pNew = u->DoUpgrade();
 	if(!pNew) { err = "the game refused the upgrade"; return JVal(); }

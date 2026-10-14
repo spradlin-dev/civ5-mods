@@ -439,6 +439,18 @@ CLAUDE_TOOL(ToolCityOptions)
 		projects.push_back(JVal(pj));
 	}
 	if(!projects.empty()) o["projects"] = JVal(projects);
+	JArr processes;
+	for(int i = 0; i < GC.getNumProcessInfos(); ++i)
+	{
+		ProcessTypes e = (ProcessTypes)i;
+		if(!c->canMaintain(e)) continue;
+		CvProcessInfo* info = GC.getProcessInfo(e);
+		JObj pr;
+		pr["type"] = J(info->GetType());
+		pr["name"] = J(info->GetDescription());
+		processes.push_back(JVal(pr));
+	}
+	if(!processes.empty()) o["processes"] = JVal(processes);
 	o["faith"] = J(me->GetFaith());
 
 	JArr tiles;
@@ -552,6 +564,7 @@ CLAUDE_TOOL(ToolMoveUnit)
 	CvPlot* dest = map.plot(x, y);
 	if(!dest->isRevealed(me->getTeam())) { err = "destination tile is unexplored"; return JVal(); }
 	if(dest->isMountain()) { err = "destination is a mountain: impassable"; return JVal(); }
+	if(dest == u->plot()) { err = "the unit is already on that tile"; return JVal(); }
 	if(dest->isVisible(me->getTeam()))
 	{
 		CvCity* c = dest->getPlotCity();
@@ -565,8 +578,7 @@ CLAUDE_TOOL(ToolMoveUnit)
 	int iTurns = 0;
 	if(!u->GeneratePath(dest, 0, false, &iTurns))
 	{
-		err = "no path to that tile";
-		if(dest->isWater() && u->getDomainType() == DOMAIN_LAND) err += " (water: this unit cannot embark yet or no sea route)";
+		err = "cannot move there: " + MoveRefusal(u, dest);
 		return JVal();
 	}
 	int fromX = u->getX(), fromY = u->getY();
@@ -682,7 +694,12 @@ CLAUDE_TOOL(ToolUnitAction)
 	{
 		const UnitActionDef& def = defs[i];
 		if(action != def.name) continue;
-		if(!def.can(u, p)) { err = def.refusal; return JVal(); }
+		if(!def.can(u, p))
+		{
+			err = (def.needsMoves || action == "heal") ? "" : RestRefusal(u, p, action);
+			if(err.empty()) err = def.refusal;
+			return JVal();
+		}
 		if(def.needsMoves && !RequireMoves(u, err)) return JVal();
 		{
 			NetMessageScope scope;
@@ -718,16 +735,17 @@ CLAUDE_TOOL(ToolSetProduction)
 	UnitTypes eUnit = found.eUnit;
 	BuildingTypes eBuilding = found.eBuilding;
 	ProjectTypes eProject = (eUnit == NO_UNIT && eBuilding == NO_BUILDING) ? FindProjectType(item) : NO_PROJECT;
+	ProcessTypes eProcess = (eUnit == NO_UNIT && eBuilding == NO_BUILDING && eProject == NO_PROJECT) ? FindProcessType(item) : NO_PROCESS;
 	if(eUnit != NO_UNIT)
 	{
-		CvString why;
-		if(!c->canTrain(eUnit, false, false, false, false, &why)) { err = "this city cannot train " + std::string(GC.getUnitInfo(eUnit)->GetType()) + " right now: " + std::string(why.c_str()); return JVal(); }
+		std::string why = TrainRefusal(c, eUnit, false);
+		if(!why.empty()) { err = "this city cannot train " + std::string(GC.getUnitInfo(eUnit)->GetType()) + ": " + why; return JVal(); }
 		c->pushOrder(ORDER_TRAIN, eUnit, -1, false, !bAppend, bAppend);
 	}
 	else if(eBuilding != NO_BUILDING)
 	{
-		CvString why;
-		if(!c->canConstruct(eBuilding, false, false, false, &why)) { err = "this city cannot build " + std::string(GC.getBuildingInfo(eBuilding)->GetType()) + " right now: " + std::string(why.c_str()); return JVal(); }
+		std::string why = BuildRefusal(c, eBuilding);
+		if(!why.empty()) { err = "this city cannot build " + std::string(GC.getBuildingInfo(eBuilding)->GetType()) + ": " + why; return JVal(); }
 		c->pushOrder(ORDER_CONSTRUCT, eBuilding, -1, false, !bAppend, bAppend);
 	}
 	else if(eProject != NO_PROJECT)
@@ -735,9 +753,14 @@ CLAUDE_TOOL(ToolSetProduction)
 		if(!c->canCreate(eProject)) { err = "this city cannot work on " + item + " right now"; return JVal(); }
 		c->pushOrder(ORDER_CREATE, eProject, -1, false, !bAppend, bAppend);
 	}
+	else if(eProcess != NO_PROCESS)
+	{
+		if(!c->canMaintain(eProcess)) { err = "this city cannot run " + item + " yet (its technology is missing)"; return JVal(); }
+		c->pushOrder(ORDER_MAINTAIN, eProcess, -1, false, !bAppend, bAppend);
+	}
 	else
 	{
-		err = "unknown item '" + item + "'; use a type from city_options such as UNIT_WARRIOR, BUILDING_MONUMENT or PROJECT_APOLLO_PROGRAM";
+		err = "unknown item '" + item + "'; use a type from city_options such as UNIT_WARRIOR, BUILDING_MONUMENT, PROJECT_APOLLO_PROGRAM or PROCESS_WEALTH";
 		return JVal();
 	}
 	JObj o;

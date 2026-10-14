@@ -93,6 +93,15 @@ namespace ClaudeTool
 	ImprovementTypes FindImprovementType(const std::string& key);
 	ResourceTypes FindResourceType(const std::string& key);
 	ProjectTypes FindProjectType(const std::string& key);
+	ProcessTypes FindProcessType(const std::string& key);
+
+	// ClaudeRefusals.cpp: why the game refuses something, in words; "" when it does not refuse.
+	std::string StripMarkup(const std::string& s);
+	std::string TrainRefusal(CvCity* c, UnitTypes eUnit, bool bWillPurchase);
+	std::string BuildRefusal(CvCity* c, BuildingTypes eBuilding, bool bPurchase = false);
+	std::string RestRefusal(CvUnit* u, CvPlot* p, const std::string& action);
+	std::string MoveRefusal(CvUnit* u, CvPlot* dest);
+	std::string UpgradeRefusal(CvUnit* u);
 	// Matches a civilization's short name, player name, or numeric id as text.
 	PlayerTypes FindPlayer(const std::string& key);
 
