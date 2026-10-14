@@ -94,3 +94,12 @@ CLAUDE_TOOL(ToolMoveGreatWork);
 CLAUDE_TOOL(ToolTradeRouteOptions);
 CLAUDE_TOOL(ToolEstablishTradeRoute);
 CLAUDE_TOOL(ToolLaunchSpaceship);
+
+// ClaudeOverviews.cpp
+CLAUDE_TOOL(ToolEconomicOverview);
+CLAUDE_TOOL(ToolTradeRoutes);
+CLAUDE_TOOL(ToolMilitaryOverview);
+CLAUDE_TOOL(ToolVictoryProgress);
+CLAUDE_TOOL(ToolKnownCities);
+// ClaudeReligion.cpp
+CLAUDE_TOOL(ToolReligionOverview);

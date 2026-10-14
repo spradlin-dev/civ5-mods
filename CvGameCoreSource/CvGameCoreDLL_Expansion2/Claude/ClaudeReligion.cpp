@@ -82,14 +82,36 @@ namespace
 		JObj o;
 		if(!r) return JVal(o);
 		o["name"] = J(Localized(r->GetName().c_str()));
-		o["founder"] = J(CivName(r->m_eFounder));
+		std::string ignored;
+		CvPlayer* me = Me(ignored);
+		TeamTypes eTeam = me ? me->getTeam() : NO_TEAM;
+		bool bMetFounder = me && r->m_eFounder != NO_PLAYER && (r->m_eFounder == me->GetID() || GET_TEAM(eTeam).isHasMet(GET_PLAYER(r->m_eFounder).getTeam()));
+		o["founder"] = J(bMetFounder ? CivName(r->m_eFounder) : "a civilization you have not met");
 		o["enhanced"] = J(r->m_bEnhanced);
 		CvPlot* p = GC.getMap().plot(r->m_iHolyCityX, r->m_iHolyCityY);
-		if(p && p->getPlotCity()) o["holy_city"] = J(p->getPlotCity()->getName().c_str());
+		if(p && p->getPlotCity() && eTeam != NO_TEAM && p->isRevealed(eTeam)) o["holy_city"] = J(p->getPlotCity()->getName().c_str());
 		JArr beliefs;
 		for(int i = 0; i < r->m_Beliefs.GetNumBeliefs(); ++i) beliefs.push_back(BeliefJson(r->m_Beliefs.GetBelief(i)));
 		o["beliefs"] = JVal(beliefs);
 		o["followers"] = J(GC.getGame().GetGameReligions()->GetNumFollowers(r->m_eReligion));
+		return JVal(o);
+	}
+
+	JVal CityReligionJson(CvCity* c)
+	{
+		JObj o;
+		o["city"] = J(c->getName().c_str());
+		CvCityReligions* r = c->GetCityReligions();
+		ReligionTypes eMajority = r->GetReligiousMajority();
+		if(eMajority != NO_RELIGION)
+		{
+			const CvReligion* pR = GC.getGame().GetGameReligions()->GetReligion(eMajority, NO_PLAYER);
+			o["majority_religion"] = J(pR ? Localized(pR->GetName().c_str()) : "pantheon");
+			o["followers"] = J(r->GetNumFollowers(eMajority));
+		}
+		else o["majority_religion"] = J("none");
+		o["population"] = J(c->getPopulation());
+		if(r->IsHolyCityAnyReligion()) o["holy_city"] = J(true);
 		return JVal(o);
 	}
 
@@ -349,5 +371,36 @@ CLAUDE_TOOL(ToolChooseGreatPerson)
 	o["ok"] = J(true);
 	o["appeared_in"] = J(c->getName().c_str());
 	o["unit"] = J(UnitTypeName(e));
+	return JVal(o);
+}
+
+CLAUDE_TOOL(ToolReligionOverview)
+{
+	CvPlayer* me = Me(err);
+	if(!me) return JVal();
+	CvGameReligions* pR = GC.getGame().GetGameReligions();
+	JObj o;
+	o["faith"] = J(me->GetFaith());
+	o["faith_per_turn"] = J(me->GetTotalFaithPerTurn());
+	o["next_great_prophet_costs"] = J(me->GetReligions()->GetCostNextProphet(true, true));
+	BeliefTypes ePantheon = pR->GetBeliefInPantheon(me->GetID());
+	if(ePantheon != NO_BELIEF) o["pantheon"] = BeliefJson(ePantheon);
+	ReligionTypes eMine = pR->GetReligionCreatedByPlayer(me->GetID());
+	if(eMine != NO_RELIGION) o["your_religion"] = ReligionJson(pR->GetReligion(eMine, me->GetID()));
+	JArr founded;
+	for(int i = 0; i < GC.getNumReligionInfos(); ++i)
+	{
+		const CvReligion* r = pR->GetReligion((ReligionTypes)i, NO_PLAYER);
+		if(!r || r->m_bPantheon || (ReligionTypes)i == eMine) continue;
+		JVal v = ReligionJson(r);
+		v.get<JObj>()["cities_following"] = J(pR->GetNumCitiesFollowing((ReligionTypes)i));
+		founded.push_back(v);
+	}
+	o["other_religions_founded"] = JVal(founded);
+	o["religions_left_to_found"] = J(GC.getGame().GetGameReligions()->GetNumReligionsStillToFound());
+	JArr cities;
+	int iLoop = 0;
+	for(CvCity* c = me->firstCity(&iLoop); c; c = me->nextCity(&iLoop)) cities.push_back(CityReligionJson(c));
+	o["your_cities"] = JVal(cities);
 	return JVal(o);
 }

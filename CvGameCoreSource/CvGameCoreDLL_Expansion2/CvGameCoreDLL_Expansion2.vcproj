@@ -290,6 +290,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\Claude\ClaudeOverviews.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\Claude\ClaudeRankings.cpp"
 				>
 			</File>

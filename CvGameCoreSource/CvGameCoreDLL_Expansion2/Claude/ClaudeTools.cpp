@@ -581,6 +581,27 @@ CLAUDE_TOOL(ToolMoveUnit)
 		err = "cannot move there: " + MoveRefusal(u, dest);
 		return JVal();
 	}
+	if(ArgBool(args, "preview_only", false))
+	{
+		// The path, from the tile after the unit's to the destination, with the turn each is reached.
+		JArr path;
+		for(CvAStarNode* n = GC.getPathFinder().GetLastNode(); n; n = n->m_pParent)
+		{
+			if(n->m_iX == u->getX() && n->m_iY == u->getY()) continue;
+			JObj step;
+			step["x"] = J(n->m_iX);
+			step["y"] = J(n->m_iY);
+			step["turn"] = J(n->m_iData2);
+			path.insert(path.begin(), JVal(step));
+		}
+		JObj o;
+		o["previewed_only"] = J(true);
+		o["turns"] = J(iTurns);
+		o["path"] = JVal(path);
+		CvPlot* pEnd = u->GetPathEndTurnPlot();
+		if(pEnd) o["this_turn_ends_at"] = J(ClaudeFormat("(%d,%d)", pEnd->getX(), pEnd->getY()));
+		return JVal(o);
+	}
 	int fromX = u->getX(), fromY = u->getY();
 	{
 		NetMessageScope scope;
@@ -1056,7 +1077,7 @@ namespace
 		  "The game's own rules text for a type key: TECH_..., UNIT_..., BUILDING_..., POLICY_..., POLICY_BRANCH_..., PROMOTION_..., IMPROVEMENT_..., RESOURCE_... Includes stats and, for a tech, what it unlocks.",
 		  "{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\"}},\"required\":[\"type\"]}", ToolLookup, LOG_NONE, false },
 		{ "move_unit",
-		  "Order a unit to move to a tile. Multi-turn moves continue when you end each turn (the unit is still in place when your next turn opens); do not re-issue them. Fails with a reason if there is no path. To attack, use attack.",
+		  "Order a unit to move to a tile. Multi-turn moves continue when you end each turn (the unit is still in place when your next turn opens); do not re-issue them. Fails with a reason if there is no path. preview_only=true shows the path and turns without moving. To attack, use attack.",
 		  SCHEMA_UNIT_XY, ToolMoveUnit, LOG_MOVE, false },
 		{ "unit_action",
 		  "Give a unit an order on its current tile. action is one of the names unit_options lists under actions, build (with build=BUILD_... from builds_here), rebase (aircraft, with x and y of one of your cities or carriers), air_sweep (fighters, x and y of the tile to clear of interceptors), paradrop (paratroopers, x and y of the landing tile), nuke (atomic bombs and nuclear missiles, x and y of the target), or disband. Aircraft bomb with the attack tool.",
@@ -1203,6 +1224,24 @@ namespace
 		{ "log",
 		  "Write a line to the in-game log the human can read. Use it for your reasoning and plans each turn: what you see, what you decided and why.",
 		  "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}},\"required\":[\"text\"]}", ToolLog, LOG_NONE, false },
+		{ "economic_overview",
+		  "The Economic Overview screen: where gold comes from and where it goes each turn (cities, trade routes, diplomacy; unit upkeep and supply, building and improvement upkeep), and your strategic and luxury resources with totals, amounts in use and amounts available.",
+		  SCHEMA_EMPTY, ToolEconomicOverview, LOG_NONE, false },
+		{ "trade_routes",
+		  "The Trade Route Overview screen: every route of yours (origin, destination, kind, what each side earns per turn, turns left, the unit running it) and every route other civilizations run into your cities.",
+		  SCHEMA_EMPTY, ToolTradeRoutes, LOG_NONE, false },
+		{ "military_overview",
+		  "The Military Overview screen: unit supply and where it comes from, units over supply and the production penalty, unit upkeep in gold, and every unit with its promotion choices when one is ready.",
+		  SCHEMA_EMPTY, ToolMilitaryOverview, LOG_NONE, false },
+		{ "religion_overview",
+		  "The Religion screen: your faith, pantheon and religion, every founded religion with its beliefs, founder, holy city and followers, and the religion followed in each of your cities.",
+		  SCHEMA_EMPTY, ToolReligionOverview, LOG_NONE, false },
+		{ "victory_progress",
+		  "The Victory Progress screen: which victories are enabled; original capitals held by each civilization (Domination); your spaceship projects (Science); civilizations you are influential over (Culture); votes held and needed (Diplomatic).",
+		  SCHEMA_EMPTY, ToolVictoryProgress, LOG_NONE, false },
+		{ "known_cities",
+		  "Every city of other civilizations and city-states your civilization has seen, with position, the owner as you last saw it, whether you are at war with that owner, and, while the tile is in sight, population, hit points and strength.",
+		  SCHEMA_EMPTY, ToolKnownCities, LOG_NONE, false },
 	};
 }
 

@@ -630,7 +630,11 @@ namespace ClaudeTool
 		o["embarked"] = J(u->isEmbarked());
 		o["level"] = J(u->getLevel());
 		o["xp"] = J(u->getExperience());
-		if(u->isPromotionReady()) o["promotion_ready"] = J(true);
+		if(u->isPromotionReady())
+		{
+			o["promotion_ready"] = J(true);
+			o["promotions_available"] = JVal(PromotionsAvailable(u));
+		}
 		if(u->CanUpgradeRightNow(false))
 		{
 			o["upgrade_available_to"] = J(UnitTypeName(u->GetUpgradeUnitType()));
@@ -664,6 +668,9 @@ namespace ClaudeTool
 		o["y"] = J(c->getY());
 		o["is_capital"] = J(c->isCapital());
 		o["population"] = J(c->getPopulation());
+		if(c->IsPuppet()) o["puppet"] = J(true);
+		if(c->IsResistance()) o["resistance_turns_left"] = J(c->GetResistanceTurns());
+		if(c->IsRazing()) o["razing_turns_left"] = J(c->GetRazingTurns());
 		o["food_surplus_per_turn"] = J(c->foodDifference());
 		o["turns_to_grow"] = J(c->getFoodTurnsLeft());
 		o["focus"] = J(FocusName(c->GetCityCitizens()->GetFocusType()));
