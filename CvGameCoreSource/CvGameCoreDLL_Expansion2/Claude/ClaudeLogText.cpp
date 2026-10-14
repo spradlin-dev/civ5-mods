@@ -87,6 +87,23 @@ namespace
 		return c ? ClaudeFormat("%s (%d, %d)", c->getName().c_str(), x, y) : ClaudeFormat("(%d, %d)", x, y);
 	}
 
+	// What the acting player sees on the attacked tile: the city and its owner, or the
+	// defending unit and its owner; just the tile when it is out of sight.
+	std::string TargetText(const JObj& args)
+	{
+		std::string ignored;
+		CvPlayer* me = Me(ignored);
+		int x = ArgInt(args, "x", -1), y = ArgInt(args, "y", -1);
+		CvPlot* p = GC.getMap().plot(x, y);
+		if(!me || !p || !p->isVisible(me->getTeam())) return PlotText(args);
+		CvCity* c = p->getPlotCity();
+		if(c) return ClaudeFormat("%s's city %s (%d, %d)", CivName(c->getOwner()).c_str(), c->getName().c_str(), x, y);
+		UnitHandle hDefender = p->getBestDefender(NO_PLAYER, me->GetID());
+		CvUnit* d = hDefender.pointer();
+		if(!d) return PlotText(args);
+		return ClaudeFormat("%s %s at (%d, %d)", CivName(d->getOwner()).c_str(), UnitTypeName(d->getUnitType()), x, y);
+	}
+
 	std::string ValueText(const JVal& v);
 
 	// Every argument as "name value", with ids and coordinates turned into names.
@@ -171,8 +188,8 @@ std::string ClaudeDescribeCall(const ClaudeToolDef& tool, const JObj& args)
 {
 	const std::string name = tool.name;
 	if(name == "move_unit") return UnitText(args) + " moves to " + PlotText(args);
-	if(name == "attack") return UnitText(args) + " attacks " + PlotText(args) + (ArgBool(args, "preview_only", false) ? " (preview only)" : "");
-	if(name == "city_attack") return CityText(args, "city_id") + " bombards " + PlotText(args);
+	if(name == "attack") return UnitText(args) + " attacks " + TargetText(args) + (ArgBool(args, "preview_only", false) ? " (preview only)" : "");
+	if(name == "city_attack") return CityText(args, "city_id") + " bombards " + TargetText(args);
 	if(name == "unit_action")
 	{
 		std::string s = UnitText(args) + ": " + Words(ArgStr(args, "action"));
