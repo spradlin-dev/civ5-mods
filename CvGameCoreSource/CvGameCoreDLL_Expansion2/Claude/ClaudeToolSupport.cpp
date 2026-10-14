@@ -611,6 +611,8 @@ namespace ClaudeTool
 		o["name"] = J(u->getName().c_str());
 		o["x"] = J(u->getX());
 		o["y"] = J(u->getY());
+		PlayerTypes eLand = u->plot() ? u->plot()->getOwner() : NO_PLAYER;
+		if(eLand != NO_PLAYER && GET_PLAYER(eLand).getTeam() != u->getTeam()) o["inside_borders_of"] = J(CivName(eLand));
 		o["moves_left"] = J(Moves(u->movesLeft()));
 		o["max_moves"] = J(Moves(u->maxMoves()));
 		o["hp"] = J(u->GetCurrHitPoints());
