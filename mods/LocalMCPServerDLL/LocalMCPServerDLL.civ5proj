@@ -70,7 +70,7 @@
         <Type>InGameUIAddin</Type>
         <Name>AI Log</Name>
         <Description>Shows what the AI player is doing</Description>
-        <FileName>UI\LLMLog.xml</FileName>
+        <FileName>LLMLog.xml</FileName>
       </Content>
     </ModContent>
     <ModProperties>
@@ -92,17 +92,14 @@
       <SubType>Lua</SubType>
       <ImportIntoVFS>True</ImportIntoVFS>
     </Content>
-    <Content Include="UI\LLMLog.lua">
+    <Content Include="LLMLog.lua">
       <SubType>Lua</SubType>
       <ImportIntoVFS>False</ImportIntoVFS>
     </Content>
-    <Content Include="UI\LLMLog.xml">
+    <Content Include="LLMLog.xml">
       <SubType>Lua</SubType>
       <ImportIntoVFS>False</ImportIntoVFS>
     </Content>
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="UI\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Firaxis\ModBuddy\Civ5Mod.targets" />
 </Project>
