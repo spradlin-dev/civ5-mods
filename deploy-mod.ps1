@@ -1,12 +1,12 @@
-# Builds the mod folder with ModBuddy's own build targets (mod/LocalMCPServerDLL.civ5proj describes the mod)
+# Builds the mod folder with ModBuddy's own build targets (mods/LocalMCPServerDLL/LocalMCPServerDLL.civ5proj describes the mod)
 # and updates the deployed copy in the game's MODS folder. The .modinfo is rewritten only when its text changes:
 # the game re-registers a mod whose .modinfo changed and forgets that it was enabled, which also makes saves
 # made with it look like they need a missing mod.
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $dll = Join-Path $root 'CvGameCoreSource\BuildOutput\VS2008_ModWin32\CvGameCoreDLL_Expansion2Win32Mod.dll'
-$modSrc = Join-Path $root 'mod'
-$buildDir = Join-Path $root 'Build\Local MCP Server DLL'
+$modSrc = Join-Path $root 'mods\LocalMCPServerDLL'
+$buildDir = Join-Path $root 'mods\Build\Local MCP Server DLL'
 $userDir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "My Games\Sid Meier's Civilization 5"
 
 if (-not (Test-Path $dll)) { throw "DLL not built: $dll" }
