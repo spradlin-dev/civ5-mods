@@ -563,6 +563,7 @@ namespace ClaudeTool
 
 	std::string UnitActivity(CvUnit* u)
 	{
+		if(u->IsAutomated()) return u->GetAutomateType() == AUTOMATE_EXPLORE ? "exploring on its own (stop_automation or any order takes it back)" : "working on its own (stop_automation or any order takes it back)";
 		if(u->GetLengthMissionQueue() > 0)
 		{
 			const MissionData* m = u->GetHeadMissionData();

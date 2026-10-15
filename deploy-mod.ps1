@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $dll = Join-Path $root 'CvGameCoreSource\BuildOutput\VS2008_ModWin32\CvGameCoreDLL_Expansion2Win32Mod.dll'
 $modSrc = Join-Path $root 'mod'
-$buildDir = Join-Path $root 'Build\LocalMCPServerDLL'
+$buildDir = Join-Path $root 'Build\Local MCP Server DLL'
 $userDir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "My Games\Sid Meier's Civilization 5"
 
 if (-not (Test-Path $dll)) { throw "DLL not built: $dll" }
@@ -19,14 +19,26 @@ Get-ChildItem (Split-Path $dll) -Filter 'CvGameCoreDLL_Expansion2Win32Mod.*' | C
 $gamePath = (Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 8930' -ErrorAction SilentlyContinue).InstallLocation
 if (-not $gamePath) { throw "Civilization V install folder not found in the registry (Steam App 8930)" }
 $msbuild = Join-Path $env:windir 'Microsoft.NET\Framework\v4.0.30319\MSBuild.exe'
-& $msbuild (Join-Path $modSrc 'LocalMCPServerDLL.civ5proj') /t:Build "/p:Configuration=Package Only" /p:SafeName=LocalMCPServerDLL "/p:Civ5Path=$gamePath" "/p:Civ5UserPath=$userDir" /nologo /v:q
+& $msbuild (Join-Path $modSrc 'LocalMCPServerDLL.civ5proj') /t:Build "/p:Configuration=Package Only" "/p:SafeName=Local MCP Server DLL" "/p:Civ5Path=$gamePath" "/p:Civ5UserPath=$userDir" /nologo /v:q
 if ($LASTEXITCODE -ne 0) { throw "ModBuddy build failed" }
 
 # The build names the .modinfo after the mod and its version, and the game expects the mod folder to match.
 $modinfoFile = @(Get-ChildItem $buildDir -Filter *.modinfo)
 if ($modinfoFile.Count -ne 1) { throw "expected one .modinfo in $buildDir, found $($modinfoFile.Count)" }
 $modinfoName = $modinfoFile[0].Name
-$modDir = Join-Path $userDir "MODS\$($modinfoFile[0].BaseName)"
+$modsDir = Join-Path $userDir 'MODS'
+$modDir = Join-Path $modsDir $modinfoFile[0].BaseName
+# Only one version of the mod may be installed, or the game lists it twice.
+$safeName = $modinfoFile[0].BaseName -replace ' \(v \d+\)$', ''
+$installed = @(Get-ChildItem $modsDir -Directory -Filter "$safeName (v *)")
+# The game locks the DLL while the mod is active; at the main menu it is free.
+foreach ($dllFile in ($installed | Get-ChildItem -Recurse -Filter *.dll)) {
+    try { [IO.File]::Open($dllFile.FullName, 'Open', 'ReadWrite', 'None').Close() }
+    catch { throw "the game still has $($dllFile.Name) loaded; go to the main menu or close the game, then run again" }
+}
+$installed | Where-Object { $_.FullName -ne $modDir } | ForEach-Object {
+    Remove-Item $_.FullName -Recurse -Force; Write-Output "Removed old version $($_.Name)"
+}
 
 New-Item -ItemType Directory -Force $modDir | Out-Null
 $wanted = @()

@@ -317,6 +317,9 @@ CLAUDE_TOOL(ToolUnitOptions)
 		if(defs[i].needsMoves && !u->canMove()) waiting.push_back(J(defs[i].name));
 		else actions.push_back(J(defs[i].name));
 	}
+	if(u->CanAutomate(AUTOMATE_EXPLORE)) actions.push_back(J("explore"));
+	if(u->CanAutomate(AUTOMATE_BUILD)) actions.push_back(J("automate_work"));
+	if(u->IsAutomated()) actions.push_back(J("stop_automation"));
 	o["actions"] = JVal(actions);
 	if(!waiting.empty())
 	{
@@ -637,7 +640,33 @@ CLAUDE_TOOL(ToolUnitAction)
 		if(eBuild == NO_BUILD) { err = "unknown build type '" + key + "' (use unit_options to list builds_here)"; return JVal(); }
 		if(!u->canBuild(p, eBuild)) { err = "cannot do that build on this tile (wrong unit, tech missing, or terrain)"; return JVal(); }
 		NetMessageScope scope;
-		u->PushMission(CvTypes::getMISSION_BUILD(), eBuild);
+		u->PushMission(CvTypes::getMISSION_BUILD(), eBuild, -1, 0, false, true);
+		o["ok"] = J(true);
+		o["unit"] = UnitJson(u);
+		return JVal(o);
+	}
+
+	if(action == "explore" || action == "automate_work")
+	{
+		bool bExplore = action == "explore";
+		if(!u->CanAutomate(bExplore ? AUTOMATE_EXPLORE : AUTOMATE_BUILD))
+		{
+			err = bExplore ? "this unit cannot explore on its own (only land and sea combat units can, and only while unexplored land it can reach remains)"
+			               : "only a worker or work boat can be automated";
+			return JVal();
+		}
+		u->Automate(bExplore ? AUTOMATE_EXPLORE : AUTOMATE_BUILD);
+		o["ok"] = J(true);
+		o["warning"] = J(bExplore
+		    ? "The game's AI now steers this unit. It picks its own route toward unexplored land, avoids danger poorly and can walk into barbarians or hostile units and die, and it hands the unit back to you when nothing it can reach is left to explore. Any direct order or stop_automation takes it back sooner."
+		    : "The game's AI now decides what this worker builds. It knows nothing of your plans: it may chop forests or jungles you wanted kept, ignore a strategic resource you need next, build roads you do not need and improve tiles you would not have chosen. Any direct order or stop_automation takes it back.");
+		o["unit"] = UnitJson(u);
+		return JVal(o);
+	}
+	if(action == "stop_automation")
+	{
+		if(!u->IsAutomated()) { err = "this unit is not automated"; return JVal(); }
+		u->SetAutomateType(NO_AUTOMATE);
 		o["ok"] = J(true);
 		o["unit"] = UnitJson(u);
 		return JVal(o);
@@ -671,7 +700,7 @@ CLAUDE_TOOL(ToolUnitAction)
 		if(!RequireMoves(u, err) || !RequireInt(args, "x", x, err) || !RequireInt(args, "y", y, err)) return JVal();
 		if(!u->canParadropAt(p, x, y)) { err = "this unit cannot drop there (not a paratrooper, must start in your territory, target within range and not enemy-held)"; return JVal(); }
 		NetMessageScope scope;
-		u->PushMission(CvTypes::getMISSION_PARADROP(), x, y);
+		u->PushMission(CvTypes::getMISSION_PARADROP(), x, y, 0, false, true);
 		o["ok"] = J(true);
 		o["unit"] = UnitJson(u);
 		return JVal(o);
@@ -724,7 +753,7 @@ CLAUDE_TOOL(ToolUnitAction)
 		if(def.needsMoves && !RequireMoves(u, err)) return JVal();
 		{
 			NetMessageScope scope;
-			u->PushMission(def.mission());
+			u->PushMission(def.mission(), -1, -1, 0, false, true);
 		}
 		o["ok"] = J(true);
 		if(action == "found_city")
@@ -739,7 +768,7 @@ CLAUDE_TOOL(ToolUnitAction)
 		return JVal(o);
 	}
 
-	err = "unknown action '" + action + "'; use one of " + UnitActionNames() + ", build, rebase, air_sweep, paradrop, nuke or disband";
+	err = "unknown action '" + action + "'; use one of " + UnitActionNames() + ", build, explore, automate_work, stop_automation, rebase, air_sweep, paradrop, nuke or disband";
 	return JVal();
 }
 
@@ -1080,7 +1109,7 @@ namespace
 		  "Order a unit to move to a tile. Multi-turn moves continue when you end each turn (the unit is still in place when your next turn opens); do not re-issue them. Fails with a reason if there is no path. preview_only=true shows the path and turns without moving. To attack, use attack.",
 		  SCHEMA_UNIT_XY_PREVIEW, ToolMoveUnit, LOG_MOVE, false },
 		{ "unit_action",
-		  "Give a unit an order on its current tile. action is one of the names unit_options lists under actions, build (with build=BUILD_... from builds_here), rebase (aircraft, with x and y of one of your cities or carriers), air_sweep (fighters, x and y of the tile to clear of interceptors), paradrop (paratroopers, x and y of the landing tile), nuke (atomic bombs and nuclear missiles, x and y of the target), or disband. Aircraft bomb with the attack tool.",
+		  "Give a unit an order on its current tile. action is one of the names unit_options lists under actions, build (with build=BUILD_... from builds_here), rebase (aircraft, with x and y of one of your cities or carriers), air_sweep (fighters, x and y of the tile to clear of interceptors), paradrop (paratroopers, x and y of the landing tile), nuke (atomic bombs and nuclear missiles, x and y of the target), or disband. Aircraft bomb with the attack tool. explore (land or sea combat units) and automate_work (workers and work boats) hand the unit to the game's own AI, which moves it every turn until you give it any order or call stop_automation; it knows nothing of your plans, so this trades control for speed.",
 		  "{\"type\":\"object\",\"properties\":{\"unit_id\":{\"type\":\"integer\"},\"action\":{\"type\":\"string\"},\"build\":{\"type\":\"string\"},\"x\":{\"type\":\"integer\"},\"y\":{\"type\":\"integer\"}},\"required\":[\"unit_id\",\"action\"]}", ToolUnitAction, LOG_UNIT, false },
 		{ "attack",
 		  "Attack the enemy unit or city on a tile with one of your units (melee needs to be adjacent; ranged units strike from range). Returns the game's own damage estimate; pass preview_only=true to see the estimate without attacking.",

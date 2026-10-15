@@ -211,7 +211,7 @@ namespace
 
 	void BriefingDecisions(CvPlayer* me, JObj& o)
 	{
-		JArr pending, idle;
+		JArr pending, idle, automated;
 		if(me->GetNumFreeTechs() > 0)
 			pending.push_back(J(ClaudeFormat("free_tech: %d free technology to claim (research_options, set_research)", me->GetNumFreeTechs())));
 		else if(me->GetPlayerTechs()->GetCurrentResearch() == NO_TECH)
@@ -237,12 +237,15 @@ namespace
 				pending.push_back(J(ClaudeFormat("upgrade: %s (id %d) can upgrade to %s for %d gold (upgrade_unit)", UnitTypeName(u->getUnitType()), u->GetID(), UnitTypeName(u->GetUpgradeUnitType()), u->upgradePrice(u->GetUpgradeUnitType()))));
 			if(u->ReadyToMove())
 				idle.push_back(J(ClaudeFormat("%s (id %d) at (%d,%d)", UnitTypeName(u->getUnitType()), u->GetID(), u->getX(), u->getY())));
+			if(u->IsAutomated())
+				automated.push_back(J(ClaudeFormat("%s (id %d) at (%d,%d): %s", UnitTypeName(u->getUnitType()), u->GetID(), u->getX(), u->getY(), u->GetAutomateType() == AUTOMATE_EXPLORE ? "exploring" : "working")));
 		}
 		EndTurnBlockingTypes eBlock = EndTurnBlocking(me);
 		if(eBlock != NO_ENDTURN_BLOCKING_TYPE && eBlock != ENDTURN_BLOCKING_UNITS)
 			pending.push_back(J("end_turn is blocked - " + BlockingName(eBlock)));
 		o["decisions_pending"] = JVal(pending);
 		o["idle_units"] = JVal(idle);
+		if(!automated.empty()) o["units_automated_by_the_game_ai"] = JVal(automated);
 	}
 
 	int DistanceToNearestOwn(CvPlayer* me, int x, int y, std::string& nearest)
