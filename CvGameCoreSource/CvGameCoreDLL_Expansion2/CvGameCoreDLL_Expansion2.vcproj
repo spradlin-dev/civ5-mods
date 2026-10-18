@@ -310,6 +310,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\Claude\ClaudeSeatPlayback.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\Claude\ClaudeCrash.cpp"
 				>
 			</File>
@@ -765,6 +769,10 @@
 			</File>
 			<File
 				RelativePath=".\Claude\ClaudeSeat.h"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeSeatPlayback.h"
 				>
 			</File>
 			<File

@@ -33,6 +33,12 @@ std::string ClaudeFormat(const char* fmt, ...)
 	return buf;
 }
 
+void ClaudeDiagLog(const std::string& msg)
+{
+	FILogFile* pLog = LOGFILEMGR.GetLog("MCPServer.log", FILogFile::kDontTimeStamp);
+	if(pLog) pLog->Msg("%s", msg.c_str());
+}
+
 bool ClaudeIsPlayerTurn(const CvPlayer& kPlayer)
 {
 	if(!kPlayer.isHuman() || !kPlayer.isAlive() || !kPlayer.isTurnActive() || kPlayer.isEndTurn()) return false;
@@ -706,6 +712,11 @@ namespace ClaudeTool
 		for(int i = 1; i < c->getOrderQueueLength(); ++i)
 			queue.push_back(J(OrderName(c->getOrderFromQueue(i))));
 		o["production_queue_after_current"] = JVal(queue);
+
+		JArr buildings;
+		for(int i = 0; i < GC.getNumBuildingInfos(); ++i)
+			if(c->GetCityBuildings()->GetNumBuilding((BuildingTypes)i) > 0) buildings.push_back(J(BuildingName((BuildingTypes)i)));
+		o["buildings"] = JVal(buildings);
 
 		JObj y;
 		y["food"] = J(c->getYieldRate(YIELD_FOOD, false));

@@ -19184,6 +19184,7 @@ int CvUnit::UnitPathTo(int iX, int iY, int iFlags, int iPrevETA, bool bBuildingR
 	{
 		if(!canMoveInto(*pDestPlot))
 		{
+			ClaudeNoteOrdersCancelled(this, "an air unit can no longer land there (no room, or it is out of range)");
 			return 0;
 		}
 
@@ -19197,6 +19198,7 @@ int CvUnit::UnitPathTo(int iX, int iY, int iFlags, int iPrevETA, bool bBuildingR
 			if(!GC.GetBuildRouteFinder().GeneratePath(getX(), getY(), iX, iY, getOwner()))
 			{
 				LOG_UNIT_MOVES_MESSAGE("Unable to generate path with BuildRouteFinder");
+				ClaudeNoteOrdersCancelled(this, "no route can be built that way any more");
 				return 0;
 			}
 
@@ -19214,6 +19216,7 @@ int CvUnit::UnitPathTo(int iX, int iY, int iFlags, int iPrevETA, bool bBuildingR
 
 			if(!pPathPlot || !canMoveInto(*pPathPlot, iFlags | MOVEFLAG_DESTINATION))
 			{
+				ClaudeNoteOrdersCancelled(this, "the next tile on the route can no longer be entered");
 				// add route interrupted
 				CvNotifications* pNotifications = GET_PLAYER(getOwner()).GetNotifications();
 				if(pNotifications)
@@ -19239,6 +19242,7 @@ int CvUnit::UnitPathTo(int iX, int iY, int iFlags, int iPrevETA, bool bBuildingR
 			if (!bPathGenerated)
 			{
 				LOG_UNIT_MOVES_MESSAGE("Unable to Generate path");
+				ClaudeNoteOrdersCancelled(this, "no path leads there any more: something now blocks every route (units, closed borders or newly seen terrain)");
 				return 0;
 			}
 
@@ -19257,6 +19261,7 @@ int CvUnit::UnitPathTo(int iX, int iY, int iFlags, int iPrevETA, bool bBuildingR
 		if(iPrevETA >= 0 && kNode.m_iData2 > iPrevETA + 2)
 		{
 			LOG_UNIT_MOVES_MESSAGE_OSTR(std::string("Rejecting move iPrevETA=") << iPrevETA << std::string(", m_iData2=") << kNode.m_iData2);
+			ClaudeNoteOrdersCancelled(this, "the way there now takes more than two turns longer than at the start of this turn's move (something newly seen is in the way); order it again if you still want it there");
 			bRejectMove = true;
 		}
 
@@ -19279,6 +19284,7 @@ int CvUnit::UnitPathTo(int iX, int iY, int iFlags, int iPrevETA, bool bBuildingR
 			if(pkMissionData != NULL && pkMissionData->iPushTurn != GC.getGame().getGameTurn())
 			{
 				LOG_UNIT_MOVES_MESSAGE_OSTR(std::string("Rejecting move pkMissionData->iPushTurn=") << pkMissionData->iPushTurn << std::string(", GC.getGame().getGameTurn()=") << GC.getGame().getGameTurn());
+				ClaudeNoteOrdersCancelled(this, "it would end this turn on the destination, which it can no longer enter (a unit stands there, or the tile is now closed to it); order it again if you still want it there");
 				bRejectMove = true;
 			}
 		}

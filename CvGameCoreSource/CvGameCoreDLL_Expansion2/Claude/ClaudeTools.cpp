@@ -1097,7 +1097,7 @@ namespace
 		  "What one unit can do right now: actions for unit_action, tile improvements it can build here, promotions available, enemies it can attack, and which adjacent tiles it can enter.",
 		  SCHEMA_UNIT, ToolUnitOptions, LOG_NONE, false },
 		{ "cities",
-		  "All your cities: population, growth, production, focus and per-turn yields.",
+		  "All your cities: population, growth, production, the buildings each already has, focus and per-turn yields.",
 		  SCHEMA_EMPTY, ToolCities, LOG_NONE, false },
 		{ "city_options",
 		  "Everything one city can build or buy right now: units, buildings and projects with production cost and turns, gold and faith prices, and the tiles it can buy. Use the type strings with set_production or buy.",

@@ -22,11 +22,50 @@
 
 namespace ClaudeTool
 {
+	// The unit on dest (or sharing u's own tile) that keeps u from being there, by
+	// CvPlot::getNumFriendlyUnitsOfType's rules: a non-enemy of the same kind (military or civilian), or
+	// another civilization's unit of any kind; trade units stack freely. The first match is the blocker
+	// because the game allows one unit of a kind per tile. A unit the player cannot see is skipped, so a
+	// hidden blocker falls through to the pathing reasons unnamed.
+	const CvUnit* BlockingUnit(const CvUnit* u, const CvPlot* dest)
+	{
+		if(u->isTrade() || !dest->isVisible(u->getTeam())) return NULL;
+		bool bWouldEmbark = dest != u->plot() && dest->isWater() && u->canEmbarkOnto(*u->plot(), *dest);
+		for(const IDInfo* node = dest->headUnitNode(); node != NULL; node = dest->nextUnitNode(node))
+		{
+			const CvUnit* other = ::getUnit(*node);
+			if(!other || other == u || other->isCargo() || other->isInvisible(u->getTeam(), false) || GET_TEAM(u->getTeam()).isAtWar(other->getTeam())) continue;
+			if(other->getOwner() != u->getOwner() || other->AreUnitsOfSameType(*u, bWouldEmbark)) return other;
+		}
+		return NULL;
+	}
+
 	namespace
 	{
-		std::string Stacked()
+		// Who the unit keeping u off a tile is, from u's owner's side: a teammate's unit is named as
+		// such, because a model that only sees "another civilization" assumes it is not an ally's.
+		std::string Sharer(const CvUnit* u, const CvUnit* other)
 		{
-			return "another of your units of the same kind shares this tile; a tile holds one military and one civilian unit";
+			if(other->getOwner() == u->getOwner()) return "one of your units of the same kind";
+			std::string owner;
+			if(other->getTeam() == u->getTeam()) owner = "your teammate " + CivName(other->getOwner()) + "'s";
+			else if(!GET_TEAM(u->getTeam()).isHasMet(other->getTeam())) owner = "another civilization's";
+			else owner = CivName(other->getOwner()) + "'s";
+			return owner + " " + UnitTypeName(other->getUnitType());
+		}
+
+		std::string SharingRule(const CvUnit* u, const CvUnit* other)
+		{
+			if(other->getOwner() == u->getOwner()) return "a tile holds one military and one civilian unit";
+			if(other->getTeam() == u->getTeam()) return "units of different civilizations cannot share a tile, teammates included";
+			return "units of civilizations you are not at war with cannot share a tile, and only an attack moves an enemy";
+		}
+
+		std::string Stacked(const CvUnit* u, const CvPlot* p)
+		{
+			const CvUnit* other = BlockingUnit(u, p);
+			if(!other) return "another unit shares this tile; a tile holds one military and one civilian unit";
+			return Sharer(u, other) + " shares this tile; " + SharingRule(u, other);
 		}
 
 		std::string TechNeeded(TechTypes e)
@@ -98,8 +137,11 @@ namespace ClaudeTool
 		return "the game's rules do not allow it here; it is not listed in city_options";
 	}
 
+	// bPurchase: the question is whether it can be bought, so production cost does not count, and a
+	// building the city is already working on may be bought, judged as CvCity::IsCanPurchase judges it.
 	std::string BuildRefusal(CvCity* c, BuildingTypes eBuilding, bool bPurchase)
 	{
+		if(bPurchase && c->getFirstBuildingOrder(eBuilding) != -1 && c->canConstruct(eBuilding, true, false, true)) return "";
 		if(c->canConstruct(eBuilding, false, false, bPurchase)) return "";
 		CvString why;
 		c->canConstruct(eBuilding, false, false, bPurchase, &why);
@@ -113,7 +155,7 @@ namespace ClaudeTool
 		if(GC.getGame().isOption(GAMEOPTION_NO_ESPIONAGE) && info->IsEspionage()) return "espionage is disabled in this game";
 		if(p.getCivilizationInfo().getCivilizationBuildings(eClass) != eBuilding) return "your civilization has its own building in place of this one";
 		if(c->GetCityBuildings()->GetNumBuilding(eBuilding) > 0) return "the city already has it";
-		if(c->getFirstBuildingOrder(eBuilding) != -1) return "it is already in this city's build queue";
+		if(!bPurchase && c->getFirstBuildingOrder(eBuilding) != -1) return "it is already in this city's build queue";
 		if(!bPurchase && info->GetProductionCost() == -1) return "it cannot be built with production";
 		PolicyBranchTypes eBranch = (PolicyBranchTypes)info->GetPolicyBranchType();
 		if(eBranch != NO_POLICY_BRANCH_TYPE && !p.GetPlayerPolicies()->IsPolicyBranchUnlocked(eBranch)) return std::string("needs the ") + GC.getPolicyBranchInfo(eBranch)->GetDescription() + " policy branch";
@@ -185,7 +227,7 @@ namespace ClaudeTool
 	std::string RestRefusal(CvUnit* u, CvPlot* p, const std::string& action)
 	{
 		if(u->isWaiting()) return "the unit is already resting (fortified, asleep or on alert)";
-		if(p->getNumFriendlyUnitsOfType(u) > GC.getPLOT_UNIT_LIMIT()) return Stacked() + "; one of them must move before either can rest";
+		if(p->getNumFriendlyUnitsOfType(u) > GC.getPLOT_UNIT_LIMIT()) return Stacked(u, p) + "; one must move away before this unit can rest";
 		if(action == "fortify")
 		{
 			if(!u->IsCombatUnit()) return "non-combat units sleep instead of fortifying";
@@ -195,31 +237,10 @@ namespace ClaudeTool
 		return "";
 	}
 
-	// The unit on dest that keeps u out, by CvPlot::getNumFriendlyUnitsOfType's rules: a non-enemy of
-	// the same kind (military or civilian), or another civilization's unit of any kind; trade units stack
-	// freely. The first match is the blocker because the game allows one unit of a kind per tile. A unit
-	// the player cannot see is skipped, so a hidden blocker falls through to the pathing reasons unnamed.
-	const CvUnit* BlockingUnit(const CvUnit* u, const CvPlot* dest)
-	{
-		if(u->isTrade() || !dest->isVisible(u->getTeam())) return NULL;
-		for(const IDInfo* node = dest->headUnitNode(); node != NULL; node = dest->nextUnitNode(node))
-		{
-			const CvUnit* other = ::getUnit(*node);
-			if(!other || other->isCargo() || other->isInvisible(u->getTeam(), false) || GET_TEAM(u->getTeam()).isAtWar(other->getTeam())) continue;
-			if(other->getOwner() != u->getOwner() || other->AreUnitsOfSameType(*u, dest->isWater() && u->canEmbarkOnto(*u->plot(), *dest))) return other;
-		}
-		return NULL;
-	}
-
 	std::string MoveRefusal(CvUnit* u, CvPlot* dest)
 	{
 		const CvUnit* blocker = BlockingUnit(u, dest);
-		if(blocker && blocker->getOwner() != u->getOwner())
-		{
-			std::string owner = GET_TEAM(u->getTeam()).isHasMet(blocker->getTeam()) ? CivName(blocker->getOwner()) + "'s" : "another civilization's";
-			return owner + " " + UnitTypeName(blocker->getUnitType()) + " stands on that tile; units of civilizations you are not at war with cannot share a tile, and only an attack moves an enemy";
-		}
-		if(blocker) return "one of your units of the same kind is already on that tile; a tile holds one military and one civilian unit";
+		if(blocker) return Sharer(u, blocker) + " stands on that tile; " + SharingRule(u, blocker);
 		if(dest->isOwned() && dest->getTeam() != u->getTeam() && !u->canEnterTerritory(dest->getTeam(), false, dest->isCity()))
 			return "that tile belongs to " + CivName(dest->getOwner()) + ", whose borders are closed to you (no open borders and not at war)";
 		if(!dest->isValidDomainForLocation(*u)) return dest->isWater() ? "that is water: this unit cannot embark yet, or no sea route exists" : "that is land: a ship cannot go there";
@@ -238,7 +259,7 @@ namespace ClaudeTool
 		CvUnitEntry* info = GC.getUnitInfo(eUp);
 		CvPlayer& p = GET_PLAYER(u->getOwner());
 		if(info && !HasTech(p, info->GetPrereqAndTech())) return TechNeeded((TechTypes)info->GetPrereqAndTech());
-		if(u->plot()->getNumFriendlyUnitsOfType(u) > GC.getPLOT_UNIT_LIMIT()) return Stacked();
+		if(u->plot()->getNumFriendlyUnitsOfType(u) > GC.getPLOT_UNIT_LIMIT()) return Stacked(u, u->plot());
 		if(u->plot()->getOwner() != u->getOwner()) return "the unit must stand inside your own borders";
 		int iCost = u->upgradePrice(eUp);
 		if(p.GetTreasury()->GetGold() < iCost) return ClaudeFormat("it costs %d gold and you have %d", iCost, p.GetTreasury()->GetGold());

@@ -10,6 +10,8 @@ class CvPlot;
 struct OrderData;
 
 std::string ClaudeFormat(const char* fmt, ...);
+// One line in MCPServer.log, the mod's own diagnostic log.
+void ClaudeDiagLog(const std::string& msg);
 
 // True while the player can still give orders this turn. Shared by the bridge's
 // turn flag and the status tool so both agree.

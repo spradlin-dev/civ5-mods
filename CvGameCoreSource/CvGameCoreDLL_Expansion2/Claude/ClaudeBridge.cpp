@@ -11,6 +11,7 @@
 #include "ClaudeSeat.h"
 #include "ClaudeDiplomacy.h"
 #include "ClaudeLogText.h"
+#include "ClaudeSeatPlayback.h"
 #include "../CvGame.h"
 #include "../CvPlayer.h"
 #include "../CvGlobals.h"
@@ -55,12 +56,6 @@ struct ClaudeJob
 
 namespace
 {
-	void DiagLog(const std::string& msg)
-	{
-		FILogFile* pLog = LOGFILEMGR.GetLog("MCPServer.log", FILogFile::kDontTimeStamp);
-		if(pLog) pLog->Msg("%s", msg.c_str());
-	}
-
 	picojson::value JsonRpcResponse(const picojson::value& id, const picojson::value& result)
 	{
 		picojson::object o;
@@ -514,11 +509,11 @@ void ClaudeBridge::Impl::TryStart()
 	pServer = new ClaudeHttpServer();
 	if(pServer->Start(CLAUDE_PORT, &Impl::HttpHandler))
 	{
-		DiagLog(ClaudeFormat("MCP bridge listening on http://127.0.0.1:%d/mcp", CLAUDE_PORT));
+		ClaudeDiagLog(ClaudeFormat("MCP bridge listening on http://127.0.0.1:%d/mcp", CLAUDE_PORT));
 		return;
 	}
 	std::string msg = "MCP bridge FAILED to start: " + pServer->lastError();
-	DiagLog(msg);
+	ClaudeDiagLog(msg);
 	if(!startFailureShown)
 	{
 		startFailureShown = true;
@@ -588,6 +583,7 @@ void ClaudeBridge::Impl::Tick()
 	gameTurn = iTurn;
 	DrainChat();
 	UpdateSessions();
+	ClaudeKeepSeatTurnVisible();
 	ClaudeRemindHumanOfDeals();
 	DrainPopups();
 
@@ -988,7 +984,7 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, co
 			t["inputSchema"] = schema;
 			if(!err.empty())
 			{
-				DiagLog(std::string("tool schema for ") + tools[i].name + " does not parse: " + err);
+				ClaudeDiagLog(std::string("tool schema for ") + tools[i].name + " does not parse: " + err);
 				t["description"] = picojson::value("BROKEN TOOL SCHEMA (" + err + "): " + tools[i].description);
 			}
 			list.push_back(picojson::value(t));
