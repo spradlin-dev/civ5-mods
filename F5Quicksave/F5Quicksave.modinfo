@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Mod id="48b282ae-71d1-42af-be6d-529cfa89e407" version="3">
+  <Properties>
+    <Name>F5 Quicksave</Name>
+    <Stability>Alpha</Stability>
+    <Teaser>Press F5 to Quicksave</Teaser>
+    <Description>Press F5 to Quicksave</Description>
+    <Authors>spradlin-dev</Authors>
+    <HideSetupGame>0</HideSetupGame>
+    <AffectsSavedGames>0</AffectsSavedGames>
+    <SupportsSinglePlayer>1</SupportsSinglePlayer>
+    <SupportsMultiplayer>1</SupportsMultiplayer>
+    <SupportsHotSeat>1</SupportsHotSeat>
+    <SupportsMac>1</SupportsMac>
+    <ReloadAudioSystem>0</ReloadAudioSystem>
+    <ReloadLandmarkSystem>0</ReloadLandmarkSystem>
+    <ReloadStrategicViewSystem>0</ReloadStrategicViewSystem>
+    <ReloadUnitSystem>0</ReloadUnitSystem>
+  </Properties>
+  <Dependencies />
+  <References />
+  <Blocks />
+  <Files>
+    <File md5="35AF00A9ACD10B3B0BBADB6E82E4AE11" import="0">F5Quicksave.lua</File>
+  </Files>
+  <EntryPoints>
+    <EntryPoint type="InGameUIAddin" file="F5Quicksave.lua">
+      <Name>F5Quicksave</Name>
+      <Description>load all contexts</Description>
+    </EntryPoint>
+  </EntryPoints>
+</Mod>

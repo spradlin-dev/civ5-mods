@@ -1,10 +1,10 @@
-CvGameCoreSource/BuildOutput/
-CvGameCoreSource/BuildTemp/
+LocalMCPServerDLL/CvGameCoreSource/BuildOutput/
+LocalMCPServerDLL/CvGameCoreSource/BuildTemp/
 *.ncb
 *.suo
 *.user
 deployed-symbols/
 Build/
 Packages/
-mods/LocalMCPServerDLL/CvGameCore_Expansion2.dll
+LocalMCPServerDLL/mod/CvGameCore_Expansion2.dll
 *.civ5suo
