@@ -190,6 +190,13 @@ CLAUDE_TOOL(ToolStatus)
 	o["ai_processing"] = J(AiProcessing());
 	o["end_turn_blocking"] = J(BlockingName(EndTurnBlocking(me)));
 	o["units_needing_orders"] = J(me->GetCountReadyUnits());
+	std::vector<std::string> chat = ClaudeBridge::Get().TakeChat((int)me->GetID());
+	if(!chat.empty())
+	{
+		JArr messages;
+		for(size_t i = 0; i < chat.size(); ++i) messages.push_back(J(chat[i]));
+		o["messages_from_your_teammate"] = JVal(messages);
+	}
 	if(ClaudeSeatOnScreen())
 	{
 		o["seat"] = J("none claimed: you act for the human's own civilization");
@@ -1045,6 +1052,20 @@ CLAUDE_TOOL(ToolLog)
 	return JVal(o);
 }
 
+CLAUDE_TOOL(ToolChat)
+{
+	if(!RequireIdentity(err)) return JVal();
+	CvPlayer* me = Me(err);
+	if(!me) return JVal();
+	std::string text = ArgStr(args, "text");
+	if(text.empty()) { err = "text is required"; return JVal(); }
+	if(ClaudeSeatOnScreen() || !ClaudeOnScreenTeam(me->GetID())) { err = "chat is for a seat with a human teammate; you have none"; return JVal(); }
+	ClaudeBridge::Get().ReplyChat(text);
+	JObj o;
+	o["ok"] = J(true);
+	return JVal(o);
+}
+
 // ------------------------------------------------------------------ registry
 
 namespace
@@ -1061,7 +1082,7 @@ namespace
 		  "Current turn, who you are, whether it is your turn, and what blocks ending it. Cheap; call it freely.",
 		  SCHEMA_EMPTY, ToolStatus, LOG_NONE, false },
 		{ "wait_for_my_turn",
-		  "Blocks until it is your turn or a new request from another leader arrives (about half a minute at most; pass timeout_seconds to shorten), then returns status. Call it again if is_my_turn is still false.",
+		  "Blocks until it is your turn, a new request from another leader arrives, or your human teammate messages you (about half a minute at most; pass timeout_seconds to shorten), then returns status. Call it again if is_my_turn is still false.",
 		  "{\"type\":\"object\",\"properties\":{\"timeout_seconds\":{\"type\":\"number\"}}}", ToolStatus, LOG_NONE, true },
 		{ "briefing",
 		  "Start every turn with this: what happened since your last turn, game messages you must acknowledge, decisions waiting for you, nearby enemies, economy warnings, and a diplomacy snapshot. Optional since_turn widens the event window.",
@@ -1253,6 +1274,9 @@ namespace
 		{ "log",
 		  "Write a line to the in-game log the human can read. Use it for your reasoning and plans each turn: what you see, what you decided and why.",
 		  "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}},\"required\":[\"text\"]}", ToolLog, LOG_NONE, false },
+		{ "chat",
+		  "Send a message to your human teammate. It appears in their in-game log window, where they also write to you. Only a seat on the human's team can use it.",
+		  "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}},\"required\":[\"text\"]}", ToolChat, LOG_NONE, false },
 		{ "economic_overview",
 		  "The Economic Overview screen: where gold comes from and where it goes each turn (cities, trade routes, diplomacy; unit upkeep and supply, building and improvement upkeep), and your strategic and luxury resources with totals, amounts in use and amounts available.",
 		  SCHEMA_EMPTY, ToolEconomicOverview, LOG_NONE, false },

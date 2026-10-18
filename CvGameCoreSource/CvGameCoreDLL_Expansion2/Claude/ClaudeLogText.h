@@ -20,6 +20,7 @@ struct ClaudeToolDef;
 #define CLAUDE_LOG_DIPLOMACY "diplomacy"
 #define CLAUDE_LOG_MESSAGES "messages"
 #define CLAUDE_LOG_NOTIFICATIONS "notifications"
+#define CLAUDE_LOG_CHAT "chat" // messages between the human and a teammate model
 
 // Game thread. How an action call reads in the log, before it runs.
 const char* ClaudeLogCategory(const ClaudeToolDef& tool, const picojson::object& args);

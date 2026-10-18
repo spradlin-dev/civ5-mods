@@ -273,6 +273,17 @@ void ClaudeNoteSeatNotification(PlayerTypes ePlayer, const char* szMessage, cons
 	ClaudeBridge::Get().LogLineFor(ePlayer, CLAUDE_LOG_NOTIFICATIONS, "Notification: " + text);
 }
 
+std::vector<PlayerTypes> ClaudeTeammateSeats()
+{
+	std::vector<PlayerTypes> out;
+	for(int i = 0; i < MAX_MAJOR_CIVS; ++i)
+	{
+		PlayerTypes e = (PlayerTypes)i;
+		if(ClaudeIsSeat(e) && ClaudeOnScreenTeam(e) && GET_PLAYER(e).isAlive()) out.push_back(e);
+	}
+	return out;
+}
+
 void ClaudeNoteSeatTeamPopup(TeamTypes eTeam, int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text)
 {
 	for(int i = 0; i < MAX_MAJOR_CIVS; ++i)

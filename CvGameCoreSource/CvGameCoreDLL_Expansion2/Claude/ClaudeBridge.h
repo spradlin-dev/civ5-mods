@@ -132,6 +132,19 @@ public:
 	void SetTestingMode(bool bOn);
 	bool TestingMode() const;
 
+	// Chat between the human on screen and a teammate's seat. The human's message is logged for
+	// that seat and held until its model takes it; the model's reply is logged for the seat and
+	// counts as unread until the human opens the log window.
+	// UI thread (Lua).
+	void SendChat(int player, const std::string& text);
+	int UnreadReplies();
+	void MarkRepliesSeen();
+	// Game thread, during a job. TakeChat returns the held messages, oldest first, and drops them:
+	// a status whose reply never reaches the model (its call timed out) loses them, but the
+	// human's log keeps every line.
+	std::vector<std::string> TakeChat(int player);
+	void ReplyChat(const std::string& text);
+
 	// Game thread. Popups shown to one player.
 	std::vector<ClaudePopup> GetPopupsSince(int player, int iTurn);
 	int CountUnread(int player);

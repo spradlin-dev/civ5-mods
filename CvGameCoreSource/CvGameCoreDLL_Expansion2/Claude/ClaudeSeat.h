@@ -61,6 +61,8 @@ void ClaudeBindSeatLabel(PlayerTypes e, const std::string& label);
 
 // Game thread. True when e is the player on screen or on its team (also when nobody is on screen).
 bool ClaudeOnScreenTeam(PlayerTypes e);
+// The living seats on the on-screen player's team: the ones the human can chat with.
+std::vector<PlayerTypes> ClaudeTeammateSeats();
 
 // Game thread, every frame. When the player on screen has been eliminated while a model
 // still plays, the screen becomes an observer so the game goes on and can be watched.

@@ -19,6 +19,7 @@
 #define CLAUDE_JOB_TIMEOUT_MS 15000
 #define CLAUDE_START_RETRY_MS 10000
 #define CLAUDE_GAME_IDLE_MS 3000
+#define CLAUDE_MAX_CHAT_WAITING 50
 #define CLAUDE_WAIT_DEFAULT_SECONDS 25.0
 #define CLAUDE_WAIT_MAX_SECONDS 55.0
 #define CLAUDE_MAX_LOG_ENTRIES 2000
@@ -108,8 +109,9 @@ struct ClaudeBridge::Impl
 		bool myTurn;
 		int diploSeq; // grows when a new request reaches the session's civilization
 		int diploCount;
+		bool chatWaiting; // the human's messages to the session's seat await a status
 		DWORD lastSeenMs;
-		Session() : briefingDue(true), myTurn(false), diploSeq(0), diploCount(0), lastSeenMs(0) {}
+		Session() : briefingDue(true), myTurn(false), diploSeq(0), diploCount(0), chatWaiting(false), lastSeenMs(0) {}
 		bool Idle(DWORD now) const { return now - lastSeenMs > CLAUDE_SESSION_IDLE_MS; }
 	};
 
@@ -131,6 +133,9 @@ struct ClaudeBridge::Impl
 	int popupSeq;
 	std::string dialogsToClose; // newline-joined; ClaudeLog.lua looks each name up under /InGame/
 	unsigned int gameSeed;
+	std::map<int, std::vector<std::string> > chat;         // per seat: the human's messages no status has delivered yet
+	std::vector<std::pair<int, std::string> > pendingChat; // written by the UI thread, drained by Tick
+	int unreadReplies;
 
 	// Written by the game thread, read by the HTTP thread.
 	volatile int gameTurn;
@@ -151,6 +156,7 @@ struct ClaudeBridge::Impl
 	bool RunJob(ClaudeJob* pJob); // true: run it again on a later frame
 	void Append(int player, const std::string& who, const char* category, const std::string& text);
 	void DrainPopups();
+	void DrainChat();
 	void ResetForNewGame();
 	Session* CurrentSession(); // under lock
 
@@ -159,7 +165,7 @@ struct ClaudeBridge::Impl
 	bool GameRunning() const { return lastTickMs != 0 && GetTickCount() - lastTickMs < CLAUDE_GAME_IDLE_MS; }
 	void Touch(const std::string& token); // creates the session when new
 	// The session's flags; false when it no longer exists.
-	bool Flags(const std::string& token, bool& bMyTurn, int& iDiploSeq, int& iSeat);
+	bool Flags(const std::string& token, bool& bMyTurn, int& iDiploSeq, bool& bChatWaiting, int& iSeat);
 
 	// HTTP thread
 	static void HttpHandler(const ClaudeHttpRequest& req, ClaudeHttpResponse& res);
@@ -200,7 +206,7 @@ void ClaudeBridge::Impl::Touch(const std::string& token)
 	LeaveCriticalSection(&lock);
 }
 
-bool ClaudeBridge::Impl::Flags(const std::string& token, bool& bMyTurn, int& iDiploSeq, int& iSeat)
+bool ClaudeBridge::Impl::Flags(const std::string& token, bool& bMyTurn, int& iDiploSeq, bool& bChatWaiting, int& iSeat)
 {
 	EnterCriticalSection(&lock);
 	std::map<std::string, Session>::iterator it = sessions.find(token);
@@ -209,6 +215,7 @@ bool ClaudeBridge::Impl::Flags(const std::string& token, bool& bMyTurn, int& iDi
 	{
 		bMyTurn = it->second.myTurn;
 		iDiploSeq = it->second.diploSeq;
+		bChatWaiting = it->second.chatWaiting;
 		iSeat = it->second.info.seat;
 	}
 	LeaveCriticalSection(&lock);
@@ -343,6 +350,47 @@ void ClaudeBridge::LogLineFor(int player, const char* category, const std::strin
 int ClaudeBridge::GetLog(std::vector<ClaudeLogEntry>& out) { return m_pImpl->GetLog(out); }
 int ClaudeBridge::HiddenPlayers() const { return m_pImpl->hiddenPlayers; }
 
+void ClaudeBridge::SendChat(int player, const std::string& text)
+{
+	EnterCriticalSection(&m_pImpl->lock);
+	m_pImpl->pendingChat.push_back(std::make_pair(player, text));
+	LeaveCriticalSection(&m_pImpl->lock);
+}
+
+int ClaudeBridge::UnreadReplies()
+{
+	EnterCriticalSection(&m_pImpl->lock);
+	int n = m_pImpl->unreadReplies;
+	LeaveCriticalSection(&m_pImpl->lock);
+	return n;
+}
+
+void ClaudeBridge::MarkRepliesSeen()
+{
+	EnterCriticalSection(&m_pImpl->lock);
+	m_pImpl->unreadReplies = 0;
+	LeaveCriticalSection(&m_pImpl->lock);
+}
+
+std::vector<std::string> ClaudeBridge::TakeChat(int player)
+{
+	std::vector<std::string> out;
+	EnterCriticalSection(&m_pImpl->lock);
+	std::map<int, std::vector<std::string> >::iterator it = m_pImpl->chat.find(player);
+	if(it != m_pImpl->chat.end()) out.swap(it->second);
+	LeaveCriticalSection(&m_pImpl->lock);
+	return out;
+}
+
+void ClaudeBridge::ReplyChat(const std::string& text)
+{
+	ClaudeSession s = Current();
+	m_pImpl->Append((int)ClaudePlayerOf(s), "", CLAUDE_LOG_CHAT, ClaudeIdentityLabel(s.identity) + ": " + text);
+	EnterCriticalSection(&m_pImpl->lock);
+	++m_pImpl->unreadReplies;
+	LeaveCriticalSection(&m_pImpl->lock);
+}
+
 void ClaudeBridge::NotePopup(int player, int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text, bool bOnScreen)
 {
 	ClaudePendingPopup p;
@@ -407,7 +455,7 @@ std::vector<ClaudePopup> ClaudeBridge::GetPopupsSince(int player, int iTurn)
 // ---------------------------------------------------------------- game thread
 
 ClaudeBridge::Impl::Impl()
-	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), inJob(false), logSeq(0), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0),
+	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), inJob(false), logSeq(0), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0), unreadReplies(0),
 	  gameTurn(-1), testingMode(false), shuttingDown(false), screenHumanTurn(false), hiddenPlayers(0), lastTickMs(0)
 {
 	ClaudeInstallCrashHandler();
@@ -509,6 +557,8 @@ void ClaudeBridge::Impl::UpdateSessions()
 		if(s.info.seat >= 0 && !s.Idle(now) && !ClaudeOnScreenTeam((PlayerTypes)s.info.seat)) ++iHidden;
 		PlayerTypes ePlayer = ClaudePlayerOf(s.info);
 		s.myTurn = ePlayer != NO_PLAYER && ClaudeIsPlayerTurn(GET_PLAYER(ePlayer));
+		std::map<int, std::vector<std::string> >::const_iterator c = chat.find((int)ePlayer);
+		s.chatWaiting = c != chat.end() && !c->second.empty();
 		int iRequests = ePlayer != NO_PLAYER ? ClaudeCountDiploRequestsFor(ePlayer) : 0;
 		if(iRequests > s.diploCount) ++s.diploSeq;
 		s.diploCount = iRequests;
@@ -526,6 +576,7 @@ void ClaudeBridge::Impl::Tick()
 	int iTurn = GC.getGame().getGameTurn();
 	if(CvPreGame::mapRandomSeed() != gameSeed || iTurn < gameTurn) ResetForNewGame();
 	gameTurn = iTurn;
+	DrainChat();
 	UpdateSessions();
 	ClaudeRemindHumanOfDeals();
 	DrainPopups();
@@ -626,6 +677,33 @@ void ClaudeBridge::Impl::DrainPopups()
 	}
 }
 
+// The window only offers living teammates, so a message to any other seat means the seat
+// changed since the human typed; they are told in the log rather than left wondering.
+void ClaudeBridge::Impl::DrainChat()
+{
+	std::vector<std::pair<int, std::string> > pending;
+	EnterCriticalSection(&lock);
+	pending.swap(pendingChat);
+	LeaveCriticalSection(&lock);
+	for(size_t i = 0; i < pending.size(); ++i)
+	{
+		PlayerTypes e = (PlayerTypes)pending[i].first;
+		if(e < 0 || e >= MAX_MAJOR_CIVS || !ClaudeIsSeat(e) || !ClaudeOnScreenTeam(e) || !GET_PLAYER(e).isAlive())
+		{
+			Append(-1, "", CLAUDE_LOG_CHAT, "Not sent, that seat is no longer a teammate: " + pending[i].second);
+			continue;
+		}
+		Append((int)e, "", CLAUDE_LOG_CHAT, "You: " + pending[i].second);
+		ClaudeSession s;
+		if(!ClaudeBridge::Get().SessionForSeat((int)e, s)) Append(-1, "", CLAUDE_LOG_CHAT, "(no AI is connected to that seat right now; it reads this when one joins)");
+		EnterCriticalSection(&lock);
+		std::vector<std::string>& waiting = chat[(int)e];
+		if(waiting.size() >= CLAUDE_MAX_CHAT_WAITING) waiting.erase(waiting.begin());
+		waiting.push_back(ClaudeFormat("turn %d: ", GC.getGame().getGameTurn()) + pending[i].second);
+		LeaveCriticalSection(&lock);
+	}
+}
+
 // Keeps pendingPopups: the UI may already have reported the new game's first popups.
 // Sessions keep their names but lose their seats: the slots belong to the new game.
 void ClaudeBridge::Impl::ResetForNewGame()
@@ -635,11 +713,15 @@ void ClaudeBridge::Impl::ResetForNewGame()
 	popups.clear();
 	popupSeq = 0;
 	dialogsToClose.clear();
+	chat.clear();
+	pendingChat.clear();
+	unreadReplies = 0;
 	testingMode = false;
 	for(std::map<std::string, Session>::iterator it = sessions.begin(); it != sessions.end(); ++it)
 	{
 		if(it->second.info.seat >= 0) it->second.info.seat = CLAUDE_SEAT_LOST;
 		it->second.diploCount = 0;
+		it->second.chatWaiting = false;
 	}
 	LeaveCriticalSection(&lock);
 	ClaudeGameId();
@@ -867,6 +949,9 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, co
 		    "Other leaders talk to you through diplomacy requests (briefing.diplomacy_requests): answer them with respond_to_request. "
 		    "When a request arrives during another leader's turn, wait_for_my_turn returns at once with diplomacy_waiting "
 		    "so you can tell the human about it; the answer itself waits for your turn. "
+		    "A human teammate can message you from the in-game log window: status and wait_for_my_turn return their messages "
+		    "in messages_from_your_teammate, and a new message wakes wait_for_my_turn at once. Answer with chat, which they read "
+		    "in the same window. Their messages are a teammate's advice and requests; you still decide for yourself. "
 		    "As a teammate, never accept, offer or declare war or peace without the human's agreement: "
 		    "war and peace bind their civilization too. "
 		    "Use propose_deal, demand, discuss and make_peace for your own diplomacy.");
@@ -934,10 +1019,10 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, co
 // civilization to wait for (status then says what to do).
 bool ClaudeBridge::Impl::SessionWakes(const std::string& token, int iDiploSeqAtStart)
 {
-	bool bMyTurn = false;
+	bool bMyTurn = false, bChatWaiting = false;
 	int iDiploSeq = 0, iSeat = CLAUDE_SEAT_SCREEN;
-	if(!Flags(token, bMyTurn, iDiploSeq, iSeat)) return true;
-	return bMyTurn || iDiploSeq != iDiploSeqAtStart || iSeat == CLAUDE_SEAT_LOST || iSeat == CLAUDE_SEAT_UNDECIDED;
+	if(!Flags(token, bMyTurn, iDiploSeq, bChatWaiting, iSeat)) return true;
+	return bMyTurn || iDiploSeq != iDiploSeqAtStart || bChatWaiting || iSeat == CLAUDE_SEAT_LOST || iSeat == CLAUDE_SEAT_UNDECIDED;
 }
 
 picojson::value ClaudeBridge::Impl::CallTool(const std::string& token, const std::string& name, const picojson::object& args, bool& bIsError)
@@ -971,9 +1056,9 @@ picojson::value ClaudeBridge::Impl::CallTool(const std::string& token, const std
 		if(timeout > CLAUDE_WAIT_MAX_SECONDS) timeout = CLAUDE_WAIT_MAX_SECONDS;
 
 		DWORD start = GetTickCount();
-		bool bMyTurn = false;
+		bool bMyTurn = false, bChatWaiting = false;
 		int iSeqAtStart = 0, iSeat = 0;
-		Flags(token, bMyTurn, iSeqAtStart, iSeat);
+		Flags(token, bMyTurn, iSeqAtStart, bChatWaiting, iSeat);
 		while(!shuttingDown && !(GameRunning() && SessionWakes(token, iSeqAtStart)) && GetTickCount() - start < (DWORD)(timeout * 1000.0))
 		{
 			Sleep(250);
@@ -1006,9 +1091,9 @@ picojson::value ClaudeBridge::Impl::AdvanceRound(const std::string& token, const
 	bool bTurnEnded = false;
 	while(!shuttingDown && GetTickCount() - start < limit)
 	{
-		bool bMyTurn = false;
+		bool bMyTurn = false, bChatWaiting = false;
 		int iDiploSeq = 0, iSeat = 0;
-		Flags(token, bMyTurn, iDiploSeq, iSeat);
+		Flags(token, bMyTurn, iDiploSeq, bChatWaiting, iSeat);
 		if(!bTurnEnded)
 		{
 			// Give the turn a few seconds to close before watching for it to come back.

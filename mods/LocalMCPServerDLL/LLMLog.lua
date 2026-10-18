@@ -9,6 +9,7 @@ local MAX_LINES_SHOWN = 400;
 -- entries tagged "always" are shown whatever is filtered.
 local CATEGORIES = {
 	{ key = "reasoning", label = "Notes" },
+	{ key = "chat", label = "Chat" },
 	{ key = "turn", label = "Turns" },
 	{ key = "movement", label = "Military moves" },
 	{ key = "military", label = "Military orders" },
@@ -34,18 +35,21 @@ local g_SinceIdentity = 0;
 local g_IdentityLabel = nil;
 
 -- A connected model names itself (set_identity), e.g. Claude / Opus / 5.5. The button
--- carries that name while exactly one model has; "AI" otherwise.
+-- carries that name while exactly one model has; "AI" otherwise. It also counts the
+-- chat replies written since the window was last open.
 local function UpdateIdentity()
 	local count, model, label = Game.GetLLMIdentity();
 	if count ~= 1 then
 		label = (count > 1) and string.format("%d AI players", count) or "";
 	end
-	if label == g_IdentityLabel then
+	local unread = Game.LLMChatUnread();
+	local key = label .. "|" .. unread;
+	if key == g_IdentityLabel then
 		return;
 	end
-	g_IdentityLabel = label;
+	g_IdentityLabel = key;
 	local short = (count == 1 and model ~= "") and string.sub(model, 1, 12) or "AI";
-	Controls.OpenButtonLabel:SetText(short .. " Log");
+	Controls.OpenButtonLabel:SetText(short .. " Log" .. ((unread > 0) and string.format(" (%d)", unread) or ""));
 	Controls.OpenButton:SetToolTipString("Show what " .. short .. " is thinking");
 	Controls.Title:SetText(((label ~= "") and label or "AI") .. " Log");
 end
@@ -174,6 +178,66 @@ local function Refresh(bToBottom)
 	end
 end
 
+-- The chat row: a message goes to one AI seat on the human's team, picked in the pulldown.
+-- The row is hidden when there is no such seat.
+local g_Teammates = {};
+local g_TeammatesKey = nil;
+local g_ChatTarget = nil;
+
+local function SelectChatTarget(index)
+	local teammate = g_Teammates[index];
+	if teammate == nil then
+		return;
+	end
+	g_ChatTarget = teammate.Player;
+	Controls.ChatTarget:GetButton():SetText("To: " .. teammate.Name);
+end
+
+local function UpdateTeammates()
+	local teammates = Game.GetLLMTeammates() or {};
+	local parts = {};
+	for _, teammate in ipairs(teammates) do
+		table.insert(parts, teammate.Player .. "=" .. teammate.Name);
+	end
+	local key = table.concat(parts, ";");
+	if key == g_TeammatesKey then
+		return;
+	end
+	g_TeammatesKey = key;
+	g_Teammates = teammates;
+	Controls.ChatRow:SetHide(#teammates == 0);
+	if #teammates == 0 then
+		g_ChatTarget = nil;
+		return;
+	end
+	Controls.ChatTarget:ClearEntries();
+	local selected = 1;
+	for i, teammate in ipairs(teammates) do
+		local entry = {};
+		Controls.ChatTarget:BuildEntry("InstanceOne", entry);
+		entry.Button:SetText("To: " .. teammate.Name);
+		entry.Button:SetVoid1(i);
+		if teammate.Player == g_ChatTarget then
+			selected = i;
+		end
+	end
+	Controls.ChatTarget:CalculateInternals();
+	SelectChatTarget(selected);
+end
+
+local function SendChat(text)
+	text = (text or ""):gsub("^%s+", ""):gsub("%s+$", "");
+	if text == "" or g_ChatTarget == nil then
+		return;
+	end
+	Game.LLMChat(g_ChatTarget, text);
+	Controls.ChatEntry:ClearString();
+end
+
+Controls.ChatTarget:RegisterSelectionCallback(SelectChatTarget);
+Controls.ChatEntry:RegisterCallback(SendChat);
+Controls.ChatSend:RegisterCallback(Mouse.eLClick, function() SendChat(Controls.ChatEntry:GetText()); end);
+
 for _, category in ipairs(CATEGORIES) do
 	local key = category.key;
 	g_Shown[key] = tostring(g_Settings.GetValue("Show_" .. key)) ~= "0";
@@ -192,7 +256,9 @@ Controls.FilterStack:ReprocessAnchoring();
 
 local function Open()
 	g_LastSeq = -1;
+	UpdateTeammates();
 	Refresh(true);
+	Game.LLMChatSeen();
 	Controls.Popup:SetHide(false);
 end
 
@@ -310,7 +376,9 @@ ContextPtr:SetUpdate(function(fDeltaTime)
 	g_SinceRefresh = g_SinceRefresh + fDeltaTime;
 	if g_SinceRefresh >= 1.0 then
 		g_SinceRefresh = 0;
+		UpdateTeammates();
 		Refresh();
+		Game.LLMChatSeen();
 	end
 end);
 

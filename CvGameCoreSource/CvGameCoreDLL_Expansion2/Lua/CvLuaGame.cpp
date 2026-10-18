@@ -103,6 +103,10 @@ void CvLuaGame::RegisterMembers(lua_State* L)
 	Method(LLMNotePopup);
 	Method(LLMSetActiveMods);
 	Method(LLMDialogsToClose);
+	Method(GetLLMTeammates);
+	Method(LLMChat);
+	Method(LLMChatUnread);
+	Method(LLMChatSeen);
 	Method(SetGameTurn);
 	Method(GetTurnYear);
 	Method(GetGameTurnYear);
@@ -803,6 +807,49 @@ int CvLuaGame::lLLMDialogsToClose(lua_State* L)
 	std::string names = ClaudeBridge::Get().TakeDialogsToClose();
 	lua_pushlstring(L, names.data(), names.size());
 	return 1;
+}
+//------------------------------------------------------------------------------
+//table GetLLMTeammates(); the AI seats on the on-screen player's team, as { Player, Name } entries.
+// Name is the model's, or the civilization's while no model has named itself on that seat.
+int CvLuaGame::lGetLLMTeammates(lua_State* L)
+{
+	std::vector<PlayerTypes> seats = ClaudeTeammateSeats();
+	lua_createtable(L, (int)seats.size(), 0);
+	for(size_t i = 0; i < seats.size(); ++i)
+	{
+		std::string name = ClaudeSeatLabel(seats[i]);
+		if(name.empty()) name = GET_PLAYER(seats[i]).getCivilizationShortDescription();
+		lua_createtable(L, 0, 2);
+		lua_pushinteger(L, (int)seats[i]);
+		lua_setfield(L, -2, "Player");
+		lua_pushlstring(L, name.data(), name.size());
+		lua_setfield(L, -2, "Name");
+		lua_rawseti(L, -2, (int)i + 1);
+	}
+	return 1;
+}
+//------------------------------------------------------------------------------
+//void LLMChat(int player, string text); the human's message to a teammate seat.
+int CvLuaGame::lLLMChat(lua_State* L)
+{
+	const int iPlayer = lua_tointeger(L, 1);
+	const char* szText = lua_tostring(L, 2);
+	if(szText && *szText) ClaudeBridge::Get().SendChat(iPlayer, szText);
+	return 0;
+}
+//------------------------------------------------------------------------------
+//int LLMChatUnread(); replies written since the log window was last open.
+int CvLuaGame::lLLMChatUnread(lua_State* L)
+{
+	lua_pushinteger(L, ClaudeBridge::Get().UnreadReplies());
+	return 1;
+}
+//------------------------------------------------------------------------------
+//void LLMChatSeen();
+int CvLuaGame::lLLMChatSeen(lua_State* L)
+{
+	ClaudeBridge::Get().MarkRepliesSeen();
+	return 0;
 }
 //------------------------------------------------------------------------------
 //void setGameTurn(int iNewValue);
