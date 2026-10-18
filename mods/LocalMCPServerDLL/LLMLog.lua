@@ -87,10 +87,8 @@ end
 -- Each line gets one "Go to:" button per tile it names (the LineInstance has room for 6).
 local MAX_LINKS = 6;
 
--- Look-at mode 6 is CAMERALOOKAT_IMMEDIATE: the normal mode queues the jump behind the
--- game's playback, which an eliminated human watching on sees run late.
 local function GoToTile(x, y)
-	UI.LookAt(Map.GetPlot(x, y), 6);
+	UI.LookAt(Map.GetPlot(x, y), 0);
 end
 
 -- The DLL writes tiles as "(x, y)"; models often write "(x,y)".
