@@ -493,14 +493,3 @@ local function AddTileCoordinates(hexX, hexY)
 	box:ReprocessAnchoring();
 end
 Events.SerialEventMouseOverHex.Add(AddTileCoordinates);
-
--- The game's tile tooltip sits 30 pixels right of the cursor; the 32-pixel busy cursor shown
--- during other players' turns covers its first character, so it is moved further right.
-local tileTip = {};
-TTManager:GetTypeControlTable("HexDetails", tileTip);
-if tileTip.Grid then
-	tileTip.Grid:SetOffsetX(40);
-	tileTip.Grid:ReprocessAnchoring();
-else
-	print("LLMLog: the tile tooltip was not found; it keeps the game's position");
-end
