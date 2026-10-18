@@ -46,7 +46,7 @@ local function UpdateIdentity()
 	end
 	local unread, total = Game.LLMChatUnread();
 	if g_RepliesHeard ~= nil and total > g_RepliesHeard then
-		Events.AudioPlay2DSound("AS2D_LLM_CHAT");
+		Events.AudioPlay2DSound("AS2D_IF_MP_CHAT_DING"); -- the game's multiplayer chat ding, never heard in single player
 	end
 	g_RepliesHeard = total;
 	local key = label .. "|" .. unread;
