@@ -24,7 +24,7 @@ namespace
 
 	volatile LONG* s_readerLock = NULL;   // taken by the message reader while it runs, and held while playback is paused
 	volatile const char* s_paused = NULL; // playback is paused
-	bool s_releasedThisPause = false;
+	DWORD s_lastReleaseMs = 0;
 
 	DWORD ReadDword(const BYTE* p)
 	{
@@ -95,19 +95,18 @@ void ClaudeKeepSeatTurnVisible()
 {
 	static bool s_found = FindPauseCode();
 	if(!s_found) return;
-	if(!*s_paused)
-	{
-		s_releasedThisPause = false;
-		return;
-	}
+	if(!*s_paused || *s_readerLock != 1) return;
 	// An eliminated human watching on never gets a turn, so the engine's own resume, which
 	// comes with the screen player's turn, never comes either.
-	if(s_releasedThisPause || !(SeatTurnOpen() || ClaudeScreenIsObserver())) return;
+	if(!(SeatTurnOpen() || ClaudeScreenIsObserver())) return;
 	// The engine's per-frame pause decision only acts when its wanted state differs from the paused
-	// flag, so with the flag left set it neither re-takes the lock nor notices; its own resume when
-	// the turn passes on clears both as usual. Released once per pause: after that the lock is the
-	// reader's own. A pause that ends and restarts between two frames is missed.
+	// flag, so with the flag left set it does not notice the release; its own resume when the turn
+	// passes on clears both as usual. While the screen is an observer the engine takes the lock
+	// again after a release, so the release repeats, at most twice a second: the reader's own hold
+	// of the lock lasts a frame, so one held that long is the pause's.
+	DWORD now = GetTickCount();
+	if(now - s_lastReleaseMs < 500) return;
+	s_lastReleaseMs = now;
 	LONG was = InterlockedCompareExchange(s_readerLock, 0, 1);
 	if(was != 1) ClaudeDiagLog(ClaudeFormat("Seat turn playback: the engine's reader lock held %d, not 1, when released", was));
-	s_releasedThisPause = true;
 }
