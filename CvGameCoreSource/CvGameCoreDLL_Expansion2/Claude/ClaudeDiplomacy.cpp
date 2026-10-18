@@ -258,8 +258,10 @@ namespace
 
 	// Drops the seat's requests the game can no longer carry out and tells the seat why, as a
 	// game message, so an offer never sits in the list only to fail when it is accepted.
-	void PruneStale(PlayerTypes eSeat)
+	// Returns the notices, for a tool that wants to repeat them in its own reply.
+	JArr PruneStale(PlayerTypes eSeat)
 	{
+		JArr withdrawn;
 		for(size_t i = s_requests.size(); i-- > 0;)
 		{
 			DiploRequest& r = s_requests[i];
@@ -269,7 +271,9 @@ namespace
 			std::string text = ClaudeFormat("%s withdrew request #%d (%s): %s", CivName(r.from).c_str(), r.id, StateName(r.state), why.c_str());
 			s_requests.erase(s_requests.begin() + i);
 			ClaudeBridge::Get().NotePopup(eSeat, CLAUDE_POPUP_TEXT, 0, 0, 0, false, text, false);
+			withdrawn.push_back(J(text));
 		}
+		return withdrawn;
 	}
 
 	void Record(PlayerTypes eTo, PlayerTypes eFrom, DiploUIStateTypes eState, const char* szMessage, int iExtra, const CvDeal* pDeal)
@@ -621,6 +625,11 @@ CLAUDE_TOOL(ToolAnswerDeal)
 	if(!pDeals->DoPlayerDealFinalized(other->GetID(), me->GetID(), me->GetID(), bAccept)) { err = "the deal expired: something in it is no longer available"; return JVal(); }
 	o["ok"] = J(true);
 	o["answered"] = J(bAccept ? "accepted" : "declined");
+	if(bAccept)
+	{
+		JArr withdrawn = PruneStale(me->GetID());
+		if(!withdrawn.empty()) o["also_withdrawn"] = JVal(withdrawn);
+	}
 	return JVal(o);
 }
 
@@ -754,7 +763,14 @@ CLAUDE_TOOL(ToolRespondToRequest)
 	o["ok"] = J(true);
 	o["answered"] = J(choice);
 	o["relations"] = RelationJson(me, GET_PLAYER(r->from));
-	EraseRequest(r->id);
+	bool bAccepted = r->hasDeal && choice == "accept";
+	EraseRequest(r->id); // r is dangling from here
+	if(bAccepted)
+	{
+		// What this deal made pointless, e.g. the other member of a team offering the same embassies.
+		JArr withdrawn = PruneStale(me->GetID());
+		if(!withdrawn.empty()) o["also_withdrawn"] = JVal(withdrawn);
+	}
 	return JVal(o);
 }
 
