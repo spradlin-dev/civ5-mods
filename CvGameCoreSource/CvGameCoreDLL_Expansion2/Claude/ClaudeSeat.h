@@ -61,20 +61,24 @@ std::string ClaudeSeatLabel(PlayerTypes e);
 void ClaudeBindSeatLabel(PlayerTypes e, const std::string& label);
 
 // Game thread. True when e is the player on screen or on its team (also when nobody is on screen).
+// After the human's elimination the screen is an observer; its team stays the eliminated one's.
 bool ClaudeOnScreenTeam(PlayerTypes e);
 // The living seats on the on-screen player's team: the ones the human can chat with.
 std::vector<PlayerTypes> ClaudeTeammateSeats();
 
-// Game thread, every frame. When the player on screen has been eliminated while a model
-// still plays, the screen becomes an observer so the game goes on and can be watched.
-// True while that is so: the game must not end for the human's defeat.
-bool ClaudeKeepWatching();
+// Game thread, from CvPlayer::setAlive just before a dead player's slot is closed. When the
+// player on screen dies while a seat lives on, the screen moves to a free observer slot the way
+// the game's own AI autoplay does, so the engine never sees its own slot close (which shows the
+// defeat screen and stops the map). True when the dead slot must stay open: no observer slot
+// was free, so the dead slot itself became the observer.
+bool ClaudeKeepDeadSlotOpen(PlayerTypes eDead);
 // Whether any seat is still alive: what keeps the game going after the human's elimination.
 bool ClaudeAnySeatAlive();
 
-// Test aid. Eliminates the human player on screen as the game does when their last city falls,
-// so that the game going on after their elimination can be checked without losing a whole game.
-// Refuses, with the reason in err, unless a seat is alive to keep the game going.
+// Test aid. Eliminates the human player on screen so that the game going on after their
+// elimination can be checked without losing a whole game: a teammate seat, if there is one,
+// inherits their units and then their cities as gifts, and the civilization dies as its last
+// city goes. Refuses, with the reason in err, unless a seat is alive to keep the game going.
 bool ClaudeEliminateOnScreenPlayer(std::string& err);
 // UI thread: asks for the above on the next game-thread tick; a refusal is logged.
 void ClaudeRequestEliminateOnScreenPlayer();

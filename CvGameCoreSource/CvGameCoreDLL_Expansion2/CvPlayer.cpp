@@ -15677,7 +15677,10 @@ void CvPlayer::setAlive(bool bNewValue, bool bNotify)
 
 			setTurnActive(false);
 
-			gDLL->closeSlot(GetID());
+			if(!ClaudeKeepDeadSlotOpen(GetID()))
+			{
+				gDLL->closeSlot(GetID());
+			}
 
 			if(bNotify && !isBarbarian())
 			{

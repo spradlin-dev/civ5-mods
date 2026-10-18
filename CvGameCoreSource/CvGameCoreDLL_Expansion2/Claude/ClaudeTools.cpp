@@ -1305,7 +1305,7 @@ namespace
 		  "Every city of other civilizations and city-states your civilization has seen, with position, the owner as you last saw it, whether you are at war with that owner, and, while the tile is in sight, population, hit points and strength.",
 		  SCHEMA_EMPTY, ToolKnownCities, LOG_NONE, false },
 		{ "test_eliminate_me",
-		  "Test aid for the mod, for the human to ask for: eliminates the human player on screen as if their last city fell, so that the game going on with the AI seats can be checked. Only call it when your human asks you to.",
+		  "Test aid for the mod, for the human to ask for: eliminates the human player on screen, giving their cities and units to a teammate seat if there is one, so that the game going on with the AI seats can be checked. Only call it when your human asks you to.",
 		  SCHEMA_EMPTY, ToolTestEliminateMe, LOG_NONE, false },
 	};
 }

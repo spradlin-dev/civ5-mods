@@ -1495,7 +1495,7 @@ void CvGame::update()
 
 					if((getAIAutoPlay() == 0) && !(gDLL->GetAutorun()) && GAMESTATE_EXTENDED != getGameState())
 					{
-						if(!ClaudeKeepWatching() && CvPreGame::slotStatus(getActivePlayer()) != SS_OBSERVER && !GET_PLAYER(getActivePlayer()).isAlive())
+						if(CvPreGame::slotStatus(getActivePlayer()) != SS_OBSERVER && !GET_PLAYER(getActivePlayer()).isAlive())
 						{
 							setGameState(GAMESTATE_OVER);
 						}

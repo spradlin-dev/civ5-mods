@@ -11,6 +11,7 @@ extern "C" __declspec(dllimport) HRESULT __stdcall CoCreateGuid(GUID* pguid);
 #include "../CvGame.h"
 #include "../CvPlayer.h"
 #include "../CvUnit.h"
+#include "../CvCity.h"
 #include "../CvTypes.h"
 #include "../CvGlobals.h"
 
@@ -176,23 +177,29 @@ PlayerTypes ClaudeWaitingOpponentSeat()
 	return eFound;
 }
 
+// The team of the human eliminated while the screen watches on; not kept across a reload.
+static TeamTypes s_eliminatedTeam = NO_TEAM;
+
 bool ClaudeOnScreenTeam(PlayerTypes e)
 {
 	PlayerTypes eActive = GC.getGame().getActivePlayer();
-	return eActive == NO_PLAYER || GET_PLAYER(e).getTeam() == GET_PLAYER(eActive).getTeam();
+	if(eActive == NO_PLAYER) return true;
+	TeamTypes eScreen = CvPreGame::slotStatus(eActive) == SS_OBSERVER && s_eliminatedTeam != NO_TEAM ? s_eliminatedTeam : GET_PLAYER(eActive).getTeam();
+	return GET_PLAYER(e).getTeam() == eScreen;
 }
 
-bool ClaudeKeepWatching()
+bool ClaudeKeepDeadSlotOpen(PlayerTypes eDead)
 {
-	PlayerTypes eActive = GC.getGame().getActivePlayer();
-	if(eActive == NO_PLAYER) return false;
-	if(CvPreGame::slotStatus(eActive) == SS_OBSERVER) return true;
-	if(GET_PLAYER(eActive).isAlive() || !GET_PLAYER(eActive).isHuman()) return false;
-	if(!ClaudeAnySeatAlive()) return false;
-	// The game's own AI autoplay watches this way: the dead slot becomes an observer, keeps
-	// its team's sight, and its turns are ended for it.
-	CvPreGame::setSlotStatus(eActive, SS_OBSERVER);
+	CvGame& game = GC.getGame();
+	if(eDead != game.getActivePlayer() || CvPreGame::slotStatus(eDead) != SS_TAKEN || !ClaudeAnySeatAlive()) return false;
+	s_eliminatedTeam = GET_PLAYER(eDead).getTeam();
 	ClaudeBridge::Get().LogLineFor(-1, CLAUDE_LOG_ALWAYS, "Your civilization has been eliminated. The game goes on so the AI players can finish it; you can watch to the end.");
+	if(game.CanMoveActivePlayerToObserver())
+	{
+		game.ActivateObserverSlot();
+		return false;
+	}
+	CvPreGame::setSlotStatus(eDead, SS_OBSERVER);
 	return true;
 }
 
@@ -317,8 +324,35 @@ bool ClaudeEliminateOnScreenPlayer(std::string& err)
 	if(eActive == NO_PLAYER || !GET_PLAYER(eActive).isHuman() || ClaudeIsSeat(eActive)) { err = "no human player is on screen"; return false; }
 	if(!GET_PLAYER(eActive).isAlive()) { err = "the player on screen has already been eliminated"; return false; }
 	if(!ClaudeAnySeatAlive()) { err = "no AI seat is alive to keep the game going, so the game would simply end"; return false; }
-	// bNotify false, as the game's own elimination (CvPlayer::verifyAlive) passes it.
-	GET_PLAYER(eActive).setAlive(false, false);
+	CvPlayer& dying = GET_PLAYER(eActive);
+	std::vector<PlayerTypes> heirs = ClaudeTeammateSeats();
+	if(!heirs.empty())
+	{
+		CvPlayer& heir = GET_PLAYER(heirs[0]);
+		int iLoop = 0;
+		std::vector<int> ids;
+		// Units first: giving away the last city kills the civilization, units and all.
+		for(CvUnit* u = dying.firstUnit(&iLoop); u; u = dying.nextUnit(&iLoop)) ids.push_back(u->GetID());
+		// The steps of CvUnit::gift, which only gives to the owner of the unit's tile.
+		for(size_t i = 0; i < ids.size(); ++i)
+		{
+			CvUnit* u = dying.getUnit(ids[i]);
+			if(!u) continue;
+			CvUnit* pNew = heir.initUnit(u->getUnitType(), u->getX(), u->getY(), u->AI_getUnitAIType(), NO_DIRECTION, false, false);
+			if(!pNew) continue;
+			pNew->convert(u, false);
+			pNew->setupGraphical();
+			pNew->GetReligionData()->SetReligion(u->GetReligionData()->GetReligion());
+			pNew->GetReligionData()->SetReligiousStrength(u->GetReligionData()->GetReligiousStrength());
+			pNew->GetReligionData()->SetSpreadsLeft(u->GetReligionData()->GetSpreadsLeft());
+		}
+		ids.clear();
+		for(CvCity* c = dying.firstCity(&iLoop); c; c = dying.nextCity(&iLoop)) ids.push_back(c->GetID());
+		for(size_t i = 0; i < ids.size(); ++i)
+			if(CvCity* c = dying.getCity(ids[i])) heir.acquireCity(c, false, true);
+	}
+	// Without an heir, or a city to lose: bNotify false, as the game's own elimination passes it.
+	dying.setAlive(false, false);
 	return true;
 }
 

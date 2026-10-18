@@ -282,9 +282,9 @@ end
 Controls.OpenButton:RegisterCallback(Mouse.eLClick, Open);
 Controls.CloseButton:RegisterCallback(Mouse.eLClick, Close);
 
--- A test aid: eliminates the human player on screen, as the game does when their last city
--- falls, so the game going on with the AI seats can be checked. Two clicks within a few
--- seconds, so a stray click does nothing.
+-- A test aid: eliminates the human player on screen, handing their cities and units to a
+-- teammate seat, so the game going on with the AI seats can be checked. Two clicks within a
+-- few seconds, so a stray click does nothing.
 local ELIMINATE_LABEL = "Eliminate me (test)";
 local g_EliminateArmed = 0;
 Controls.EliminateButton:RegisterCallback(Mouse.eLClick, function()
