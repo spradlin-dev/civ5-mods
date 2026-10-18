@@ -23,7 +23,7 @@ local CATEGORIES = {
 	{ key = "notifications", label = "Notifications" },
 };
 
-local g_Lines = InstanceManager:new("LineInstance", "Text", Controls.LineStack);
+local g_Lines = InstanceManager:new("LineInstance", "Root", Controls.LineStack);
 local g_Filters = InstanceManager:new("FilterInstance", "Root", Controls.FilterStack);
 local g_Settings = Modding.OpenUserData("LocalMCPServerDLL_Log", 1);
 local g_Shown = {};
@@ -74,6 +74,47 @@ local function WriterPrefix(entries)
 	end;
 end
 
+-- Each line gets one "Go to:" button per tile it names (the LineInstance has room for 6).
+local MAX_LINKS = 6;
+
+local function GoToTile(x, y)
+	UI.LookAt(Map.GetPlot(x, y), 0);
+end
+
+-- The DLL writes tiles as "(x, y)"; models often write "(x,y)".
+local function TilesNamed(line)
+	local seen = {};
+	local tiles = {};
+	for x, y in string.gmatch(line, "%((%d+),%s*(%d+)%)") do
+		local key = x .. "," .. y;
+		if not seen[key] and Map.GetPlot(tonumber(x), tonumber(y)) ~= nil then
+			seen[key] = true;
+			table.insert(tiles, { x = tonumber(x), y = tonumber(y), label = string.format("(%s, %s)", x, y) });
+		end
+	end
+	return tiles;
+end
+
+local function AddLine(line)
+	local instance = g_Lines:GetInstance();
+	instance.Text:SetText(line);
+	local tiles = TilesNamed(line);
+	for i = 1, MAX_LINKS do
+		local button = instance["Link" .. i];
+		local tile = tiles[i];
+		button:SetHide(tile == nil);
+		if tile ~= nil then
+			button:SetText(tile.label);
+			button:SetToolTipString("Show this tile on the map");
+			button:SetVoids(tile.x, tile.y);
+			button:RegisterCallback(Mouse.eLClick, GoToTile);
+		end
+	end
+	instance.Links:SetHide(#tiles == 0);
+	instance.Links:CalculateSize();
+	instance.Root:CalculateSize();
+end
+
 local function Refresh(bToBottom)
 	local seq, entries, hidden = Game.GetLLMLog();
 	if seq == g_LastSeq and hidden == g_LastHidden then
@@ -109,18 +150,18 @@ local function Refresh(bToBottom)
 
 	g_Lines:ResetInstances();
 	if #lines == 0 then
-		g_Lines:GetInstance().Text:SetText("(nothing logged yet)");
+		AddLine("(nothing logged yet)");
 	else
 		local first = math.max(1, #lines - MAX_LINES_SHOWN + 1);
 		if first > 1 then
-			g_Lines:GetInstance().Text:SetText(string.format("(%d older lines not shown)", first - 1));
+			AddLine(string.format("(%d older lines not shown)", first - 1));
 		end
 		for i = first, #lines do
 			local line = lines[i];
 			if line == "" then
 				line = " ";
 			end
-			g_Lines:GetInstance().Text:SetText(line);
+			AddLine(line);
 		end
 	end
 
