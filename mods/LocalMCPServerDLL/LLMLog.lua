@@ -2,6 +2,7 @@
 -- Every game popup is reported to the DLL (Game.LLMNotePopup). It stays open
 -- until the model acknowledges it; the DLL then names the dialog in Game.LLMDialogsToClose.
 include("InstanceManager");
+include("IconSupport");
 
 local MAX_LINES_SHOWN = 400;
 
@@ -33,6 +34,7 @@ local g_LastHidden = nil;
 local g_SinceRefresh = 0;
 local g_SinceIdentity = 0;
 local g_IdentityLabel = nil;
+local g_RepliesHeard = nil; -- replies counted at the last check; a rise plays the chat sound
 
 -- A connected model names itself (set_identity), e.g. Claude / Opus / 5.5. The button
 -- carries that name while exactly one model has; "AI" otherwise. It also counts the
@@ -42,7 +44,11 @@ local function UpdateIdentity()
 	if count ~= 1 then
 		label = (count > 1) and string.format("%d AI players", count) or "";
 	end
-	local unread = Game.LLMChatUnread();
+	local unread, total = Game.LLMChatUnread();
+	if g_RepliesHeard ~= nil and total > g_RepliesHeard then
+		Events.AudioPlay2DSound("AS2D_LLM_CHAT");
+	end
+	g_RepliesHeard = total;
 	local key = label .. "|" .. unread;
 	if key == g_IdentityLabel then
 		return;
@@ -141,12 +147,19 @@ local function Refresh(bToBottom)
 	local prefix = WriterPrefix(entries);
 	for _, entry in ipairs(entries) do
 		if entry.Category == "always" or g_Shown[entry.Category] ~= false then
+			local color = nil;
+			if entry.Category == "chat" then
+				color = (string.sub(entry.Text, 1, 4) == "You:") and "[COLOR_CYAN]" or "[COLOR_YELLOW]";
+			end
 			local text = prefix(entry) .. entry.Text;
 			repeat
 				local before = text;
 				text = text:gsub("%[NEWLINE%]%s*%[NEWLINE%]", "[NEWLINE]"):gsub("%s*%[NEWLINE%]%s*$", "");
 			until text == before;
 			for line in string.gmatch(text .. "\n", "(.-)\n") do
+				if color ~= nil and line ~= "" then
+					line = color .. line .. "[ENDCOLOR]";
+				end
 				table.insert(lines, line);
 			end
 		end
@@ -359,6 +372,59 @@ local function ReportActiveMods()
 	Game.LLMSetActiveMods(table.concat(mods, "\n"));
 end
 ReportActiveMods();
+
+-- The game's "Processing turn for ..." banner (TurnProcessing.lua) skips human players, and a
+-- seat is a human slot, so the banner stays blank during a seat's turn. This fills it the way
+-- the game does for an AI civilization; the game hides it again when the human's turn starts.
+local TURN_BANNER = "/InGame/WorldView/TurnProcessing";
+
+local function BannerControl(id)
+	return ContextPtr:LookUpControl(TURN_BANNER .. "/" .. id);
+end
+
+local function ShowSeatTurnBanner(iPlayerID)
+	if PreGame.IsMultiplayerGame() then
+		return;
+	end
+	local player = Players[iPlayerID];
+	if player == nil or not player:IsHuman() or iPlayerID == Game.GetActivePlayer() or not player:IsTurnActive() then
+		return;
+	end
+	local banner = ContextPtr:LookUpControl(TURN_BANNER);
+	local anim = BannerControl("Anim");
+	local title = BannerControl("TurnProcessingTitle") or BannerControl("Anim/TurnProcessingGrid/TurnProcessingTitle");
+	local icon, iconBG, iconShadow = BannerControl("CivIcon"), BannerControl("CivIconBG"), BannerControl("CivIconShadow");
+	if banner == nil or anim == nil or title == nil then
+		print("LLMLog: the turn banner was not found at " .. TURN_BANNER);
+		return;
+	end
+	banner:SetHide(false);
+	local bMet = Teams[Players[Game.GetActivePlayer()]:GetTeam()]:IsHasMet(player:GetTeam());
+	if bMet then
+		title:SetText(Locale.ConvertTextKey("TXT_KEY_PROCESSING_TURN_FOR", Locale.ConvertTextKey(GameInfo.Civilizations[player:GetCivilizationType()].ShortDescription)));
+	else
+		title:SetText(Locale.ConvertTextKey("TXT_KEY_PROCESSING_TURN_FOR_UNMET_PLAYER", iPlayerID + 1));
+	end
+	if icon ~= nil and iconBG ~= nil and iconShadow ~= nil then
+		if bMet then
+			iconBG:SetHide(false);
+			iconShadow:SetHide(false);
+			CivIconHookup(iPlayerID, 64, icon, iconBG, iconShadow, false, true);
+		else
+			icon:SetTexture("CivSymbolsColor512.dds");
+			icon:SetTextureOffsetVal(448 + 7, 128 + 7);
+			icon:SetColor(Vector4(1.0, 1.0, 1.0, 1.0));
+			icon:SetHide(false);
+			iconBG:SetHide(true);
+			iconShadow:SetHide(true);
+		end
+	end
+	if anim:IsHidden() then
+		anim:SetHide(false);
+		anim:BranchResetAnimation();
+	end
+end
+Events.AIProcessingStartedForPlayer.Add(ShowSeatTurnBanner);
 
 ContextPtr:SetUpdate(function(fDeltaTime)
 	CollectAcknowledged();

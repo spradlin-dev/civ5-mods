@@ -838,11 +838,12 @@ int CvLuaGame::lLLMChat(lua_State* L)
 	return 0;
 }
 //------------------------------------------------------------------------------
-//int LLMChatUnread(); replies written since the log window was last open.
+//int, int LLMChatUnread(); replies written since the log window was last open, then replies ever.
 int CvLuaGame::lLLMChatUnread(lua_State* L)
 {
 	lua_pushinteger(L, ClaudeBridge::Get().UnreadReplies());
-	return 1;
+	lua_pushinteger(L, ClaudeBridge::Get().TotalReplies());
+	return 2;
 }
 //------------------------------------------------------------------------------
 //void LLMChatSeen();

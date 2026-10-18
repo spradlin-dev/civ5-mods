@@ -136,6 +136,7 @@ struct ClaudeBridge::Impl
 	std::map<int, std::vector<std::string> > chat;         // per seat: the human's messages no status has delivered yet
 	std::vector<std::pair<int, std::string> > pendingChat; // written by the UI thread, drained by Tick
 	int unreadReplies;
+	int totalReplies;
 
 	// Written by the game thread, read by the HTTP thread.
 	volatile int gameTurn;
@@ -365,6 +366,14 @@ int ClaudeBridge::UnreadReplies()
 	return n;
 }
 
+int ClaudeBridge::TotalReplies()
+{
+	EnterCriticalSection(&m_pImpl->lock);
+	int n = m_pImpl->totalReplies;
+	LeaveCriticalSection(&m_pImpl->lock);
+	return n;
+}
+
 void ClaudeBridge::MarkRepliesSeen()
 {
 	EnterCriticalSection(&m_pImpl->lock);
@@ -388,6 +397,7 @@ void ClaudeBridge::ReplyChat(const std::string& text)
 	m_pImpl->Append((int)ClaudePlayerOf(s), "", CLAUDE_LOG_CHAT, ClaudeIdentityLabel(s.identity) + ": " + text);
 	EnterCriticalSection(&m_pImpl->lock);
 	++m_pImpl->unreadReplies;
+	++m_pImpl->totalReplies;
 	LeaveCriticalSection(&m_pImpl->lock);
 }
 
@@ -455,7 +465,7 @@ std::vector<ClaudePopup> ClaudeBridge::GetPopupsSince(int player, int iTurn)
 // ---------------------------------------------------------------- game thread
 
 ClaudeBridge::Impl::Impl()
-	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), inJob(false), logSeq(0), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0), unreadReplies(0),
+	: pServer(NULL), lastStartAttemptMs(0), startFailureShown(false), inJob(false), logSeq(0), lastLogTurn(-1), pendingDropped(0), popupSeq(0), gameSeed(0), unreadReplies(0), totalReplies(0),
 	  gameTurn(-1), testingMode(false), shuttingDown(false), screenHumanTurn(false), hiddenPlayers(0), lastTickMs(0)
 {
 	ClaudeInstallCrashHandler();

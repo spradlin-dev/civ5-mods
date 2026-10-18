@@ -138,6 +138,7 @@ public:
 	// UI thread (Lua).
 	void SendChat(int player, const std::string& text);
 	int UnreadReplies();
+	int TotalReplies(); // ever, so the UI can notice a new one even while the window is open
 	void MarkRepliesSeen();
 	// Game thread, during a job. TakeChat returns the held messages, oldest first, and drops them:
 	// a status whose reply never reaches the model (its call timed out) loses them, but the
