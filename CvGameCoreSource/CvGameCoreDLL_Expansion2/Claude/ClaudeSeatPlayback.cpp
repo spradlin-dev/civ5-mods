@@ -2,6 +2,7 @@
 #include "ClaudeSeatPlayback.h"
 #include "ClaudeSeat.h"
 #include "ClaudeToolSupport.h"
+#include "../CvGame.h"
 #include "../CvPlayer.h"
 #include "../CvGlobals.h"
 
@@ -88,6 +89,14 @@ namespace
 			if(ClaudeIsSeat((PlayerTypes)i) && GET_PLAYER((PlayerTypes)i).isTurnActive()) return true;
 		return false;
 	}
+
+	// An eliminated human watching on never gets a turn, so the engine's own resume, which
+	// comes with the screen player's turn, never comes either.
+	bool ScreenIsObserver()
+	{
+		PlayerTypes eActive = GC.getGame().getActivePlayer();
+		return eActive != NO_PLAYER && CvPreGame::slotStatus(eActive) == SS_OBSERVER;
+	}
 }
 
 void ClaudeKeepSeatTurnVisible()
@@ -99,7 +108,7 @@ void ClaudeKeepSeatTurnVisible()
 		s_releasedThisPause = false;
 		return;
 	}
-	if(s_releasedThisPause || !SeatTurnOpen()) return;
+	if(s_releasedThisPause || !(SeatTurnOpen() || ScreenIsObserver())) return;
 	// The engine's per-frame pause decision only acts when its wanted state differs from the paused
 	// flag, so with the flag left set it neither re-takes the lock nor notices; its own resume when
 	// the turn passes on clears both as usual. Released once per pause: after that the lock is the
