@@ -455,3 +455,41 @@ ContextPtr:SetInputHandler(function(uiMsg, wParam, lParam)
 	end
 	return false;
 end);
+
+-- Tile coordinates in the game's tile box above the minimap, so the human can name a tile to
+-- the AI. Relies on the game filling the box on the same event first; the game's debug mode
+-- already prints coordinates there.
+local function PlotHelpControl(id)
+	return ContextPtr:LookUpControl("/InGame/WorldView/PlotHelpText/" .. id);
+end
+
+local g_PlotHelpMissingReported = false;
+
+local function AddTileCoordinates(hexX, hexY)
+	local plot = Map.GetPlot(hexX, hexY);
+	if plot == nil or OptionsManager:IsDebugMode() then
+		return;
+	end
+	local box, label = PlotHelpControl("TextBox"), PlotHelpControl("Text");
+	if box == nil or label == nil then
+		if not g_PlotHelpMissingReported then
+			print("LLMLog: the tile info box was not found; no coordinates will be shown");
+			g_PlotHelpMissingReported = true;
+		end
+		return;
+	end
+	local coords = "(" .. plot:GetX() .. ", " .. plot:GetY() .. ")";
+	local text = box:IsHidden() and "" or label:GetText();
+	if string.sub(text, -string.len(coords)) == coords then
+		return;
+	end
+	if text == "" then
+		label:SetText(coords);
+	else
+		label:SetText(text .. "[NEWLINE]" .. coords);
+	end
+	box:SetHide(false);
+	box:DoAutoSize();
+	box:ReprocessAnchoring();
+end
+Events.SerialEventMouseOverHex.Add(AddTileCoordinates);
