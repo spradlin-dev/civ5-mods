@@ -1,6 +1,6 @@
 -------------------------------------------------
 -- Resource Icon Manager
--- Local MCP Server DLL: the game's copy, with the icon tooltip's text moved clear of the cursor.
+-- Readable Resource Tooltips: the game's copy, with the icon tooltip's text moved clear of the cursor.
 -- The game puts a tooltip right next to the cursor whatever offset its layout asks for, so the
 -- 32-pixel busy cursor shown during other players' turns hides the first character of the
 -- resource's name; the tooltip type below pads the text instead.

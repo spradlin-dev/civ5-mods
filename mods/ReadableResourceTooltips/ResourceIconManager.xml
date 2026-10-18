@@ -4,7 +4,7 @@
     <Container ID="ResourceIconContainer" Hidden="1" />
 
     <ToolTipType Name="ResourceIconTip" >
-        <Grid Offset="30,5" Size="60,12" Padding="40,8" Style="GridBlack8" Color="White,200" Anchor="L,T" ID="Grid" >
+        <Grid Offset="30,5" Size="60,12" Padding="24,24" Style="GridBlack8" Color="White,200" Anchor="L,T" ID="Grid" >
             <Label Anchor="c,c" ID="Text" String="" WrapWidth="500" ColorSet="Beige_Black_Alpha" />
         </Grid>
     </ToolTipType>
