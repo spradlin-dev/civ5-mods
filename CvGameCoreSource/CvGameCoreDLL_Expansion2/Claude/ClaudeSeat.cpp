@@ -316,6 +316,17 @@ bool ClaudeAnySeatAlive()
 	return false;
 }
 
+bool ClaudeScreenIsObserver()
+{
+	PlayerTypes eActive = GC.getGame().getActivePlayer();
+	return eActive != NO_PLAYER && CvPreGame::slotStatus(eActive) == SS_OBSERVER;
+}
+
+bool ClaudeEngineSeesAsHuman(PlayerTypes e)
+{
+	return !(ClaudeIsSeat(e) && ClaudeScreenIsObserver());
+}
+
 static volatile bool s_eliminateRequested = false;
 
 bool ClaudeEliminateOnScreenPlayer(std::string& err)

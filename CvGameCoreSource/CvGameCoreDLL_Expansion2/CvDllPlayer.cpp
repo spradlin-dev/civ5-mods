@@ -16,6 +16,7 @@
 
 #include "CvDiplomacyRequests.h"
 #include "CvMinorCivAI.h"
+#include "Claude/ClaudeSeat.h"
 
 
 CvDllPlayer::CvDllPlayer(CvPlayerAI* pPlayer)
@@ -113,7 +114,7 @@ void CvDllPlayer::Uninit()
 //------------------------------------------------------------------------------
 bool CvDllPlayer::IsHuman() const
 {
-	return m_pPlayer->isHuman();
+	return m_pPlayer->isHuman() && ClaudeEngineSeesAsHuman(m_pPlayer->GetID());
 }
 //------------------------------------------------------------------------------
 bool CvDllPlayer::IsBarbarian() const

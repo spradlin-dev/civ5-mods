@@ -74,6 +74,13 @@ std::vector<PlayerTypes> ClaudeTeammateSeats();
 bool ClaudeKeepDeadSlotOpen(PlayerTypes eDead);
 // Whether any seat is still alive: what keeps the game going after the human's elimination.
 bool ClaudeAnySeatAlive();
+// True while the screen is an observer slot (the human eliminated, watching on).
+bool ClaudeScreenIsObserver();
+// What the engine is told when it asks whether a player is human. While the screen is an
+// observer, seats are shown as computer players: a human slot's turn that is not the screen's
+// makes the engine wait for a hotseat hand-over, holding playback and the camera the whole
+// turn. The game core itself keeps seeing seats as human, so their play is unchanged.
+bool ClaudeEngineSeesAsHuman(PlayerTypes e);
 
 // Test aid. Eliminates the human player on screen so that the game going on after their
 // elimination can be checked without losing a whole game: a teammate seat, if there is one,

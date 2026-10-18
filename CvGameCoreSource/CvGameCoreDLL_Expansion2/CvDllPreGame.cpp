@@ -11,6 +11,7 @@
 #include "CvDllDlcPackageInfo.h"
 #include "CvDllWorldInfo.h"
 #include "CvPreGame.h"
+#include "Claude/ClaudeSeat.h"
 
 CvDllPreGame::CvDllPreGame()
 {
@@ -314,7 +315,7 @@ bool CvDllPreGame::isHotSeatGame()
 //------------------------------------------------------------------------------
 bool CvDllPreGame::isHuman(PlayerTypes p)
 {
-	return CvPreGame::isHuman(p);
+	return CvPreGame::isHuman(p) && ClaudeEngineSeesAsHuman(p);
 }
 //------------------------------------------------------------------------------
 bool CvDllPreGame::isInternetGame()
