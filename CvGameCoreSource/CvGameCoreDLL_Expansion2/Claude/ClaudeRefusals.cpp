@@ -195,14 +195,38 @@ namespace ClaudeTool
 		return "";
 	}
 
+	// The unit on dest that keeps u out, by CvPlot::getNumFriendlyUnitsOfType's rules: a non-enemy of
+	// the same kind (military or civilian), or another civilization's unit of any kind; trade units stack
+	// freely. The first match is the blocker because the game allows one unit of a kind per tile. A unit
+	// the player cannot see is skipped, so a hidden blocker falls through to the pathing reasons unnamed.
+	const CvUnit* BlockingUnit(const CvUnit* u, const CvPlot* dest)
+	{
+		if(u->isTrade() || !dest->isVisible(u->getTeam())) return NULL;
+		for(const IDInfo* node = dest->headUnitNode(); node != NULL; node = dest->nextUnitNode(node))
+		{
+			const CvUnit* other = ::getUnit(*node);
+			if(!other || other->isCargo() || other->isInvisible(u->getTeam(), false) || GET_TEAM(u->getTeam()).isAtWar(other->getTeam())) continue;
+			if(other->getOwner() != u->getOwner() || other->AreUnitsOfSameType(*u, dest->isWater() && u->canEmbarkOnto(*u->plot(), *dest))) return other;
+		}
+		return NULL;
+	}
+
 	std::string MoveRefusal(CvUnit* u, CvPlot* dest)
 	{
-		if(dest->getNumFriendlyUnitsOfType(u) >= GC.getPLOT_UNIT_LIMIT()) return "one of your units of the same kind is already on that tile; a tile holds one military and one civilian unit";
+		const CvUnit* blocker = BlockingUnit(u, dest);
+		if(blocker && blocker->getOwner() != u->getOwner())
+		{
+			std::string owner = GET_TEAM(u->getTeam()).isHasMet(blocker->getTeam()) ? CivName(blocker->getOwner()) + "'s" : "another civilization's";
+			return owner + " " + UnitTypeName(blocker->getUnitType()) + " stands on that tile; units of civilizations you are not at war with cannot share a tile, and only an attack moves an enemy";
+		}
+		if(blocker) return "one of your units of the same kind is already on that tile; a tile holds one military and one civilian unit";
 		if(dest->isOwned() && dest->getTeam() != u->getTeam() && !u->canEnterTerritory(dest->getTeam(), false, dest->isCity()))
 			return "that tile belongs to " + CivName(dest->getOwner()) + ", whose borders are closed to you (no open borders and not at war)";
 		if(!dest->isValidDomainForLocation(*u)) return dest->isWater() ? "that is water: this unit cannot embark yet, or no sea route exists" : "that is land: a ship cannot go there";
 		if(!u->canEnterTerrain(*dest)) return "this unit cannot enter that terrain";
-		return "no path: units in the way, or land you may not enter, block every route";
+		std::string why = "no path: units in the way, or land you may not enter, block every route";
+		if(u->IsAutomated()) why += "; the unit is also automated: unit_action stop_automation, then try again";
+		return why;
 	}
 
 	std::string UpgradeRefusal(CvUnit* u)

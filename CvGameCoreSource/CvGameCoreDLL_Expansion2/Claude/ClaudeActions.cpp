@@ -1,6 +1,7 @@
 #include "CvGameCoreDLLPCH.h"
 #include "ClaudeToolSupport.h"
 #include "ClaudeToolHandlers.h"
+#include "ClaudeBridge.h"
 #include "../CvGame.h"
 #include "../CvPlayer.h"
 #include "../CvTeam.h"
@@ -228,17 +229,22 @@ CLAUDE_TOOL(ToolAttack)
 
 	// The game queues an attack from a unit with no moves and never runs it.
 	if(!RequireMoves(u, err)) return JVal();
+	// A unit still animating its last order (a set-up, a move) queues the attack behind it, and
+	// the result would be read before the attack ran.
+	if(u->IsBusy()) { err = "the unit is still finishing its last order; try again in a moment"; ClaudeBridge::RetryLater(); return JVal(); }
 	PlayerTypes eDefOwner = target.unit ? target.unit->getOwner() : NO_PLAYER;
 	int iDefId = target.unit ? target.unit->GetID() : -1;
 	int hpBefore = u->GetCurrHitPoints();
+	int movesBefore = u->movesLeft();
+	int targetHpBefore = target.unit ? target.unit->GetCurrHitPoints() : target.city->GetMaxHitPoints() - target.city->getDamage();
 	{
 		NetMessageScope scope;
 		// Aircraft strike through a move onto the target; the engine rejects them in the range-attack mission.
 		if(target.ranged && u->getDomainType() != DOMAIN_AIR) u->PushMission(CvTypes::getMISSION_RANGE_ATTACK(), x, y, 0, false, true);
 		else u->PushMission(CvTypes::getMISSION_MOVE_TO(), x, y, 0, false, true);
 	}
-	o["attacked"] = J(true);
 
+	int targetHpAfter = -1;
 	CvUnit* uAfter = me->getUnit(iUnit);
 	if(uAfter && !uAfter->isDelayedDeath())
 	{
@@ -255,15 +261,20 @@ CLAUDE_TOOL(ToolAttack)
 	if(target.unit)
 	{
 		CvUnit* dAfter = GET_PLAYER(eDefOwner).getUnit(iDefId);
-		if(dAfter && !dAfter->isDelayedDeath()) o["target_hp"] = J(dAfter->GetCurrHitPoints());
+		if(dAfter && !dAfter->isDelayedDeath()) { targetHpAfter = dAfter->GetCurrHitPoints(); o["target_hp"] = J(targetHpAfter); }
 		else o["target_destroyed"] = J(true);
 	}
 	else
 	{
 		CvCity* cityAfter = p->getPlotCity();
 		if(cityAfter && cityAfter->getOwner() == me->GetID()) o["city_captured"] = J(true);
-		else if(cityAfter) o["target_hp"] = J(cityAfter->GetMaxHitPoints() - cityAfter->getDamage());
+		else if(cityAfter) { targetHpAfter = cityAfter->GetMaxHitPoints() - cityAfter->getDamage(); o["target_hp"] = J(targetHpAfter); }
 	}
+	// Every attack that ran changed something: the target's health, or the attacker's health or moves.
+	bool bNothingChanged = uAfter && !uAfter->isDelayedDeath() && targetHpAfter == targetHpBefore
+	                       && uAfter->GetCurrHitPoints() == hpBefore && uAfter->movesLeft() == movesBefore;
+	o["attacked"] = J(!bNothingChanged);
+	if(bNothingChanged) o["note"] = J("the game did not carry out the attack; check attack with preview_only for the reason, or try again in a moment");
 	return JVal(o);
 }
 

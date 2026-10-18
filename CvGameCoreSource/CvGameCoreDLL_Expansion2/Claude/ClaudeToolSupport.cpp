@@ -465,8 +465,19 @@ namespace ClaudeTool
 		if(!p->isVisible(me->getTeam())) { why = "target tile is not visible"; return false; }
 		if(out.ranged)
 		{
+			// The same checks as CvUnit::canRangeStrikeAt, taken one at a time so the refusal names the one that failed.
+			if(u->isEmbarked()) { why = "an embarked unit cannot fire; land it first"; return false; }
 			if(u->isMustSetUpToRangedAttack() && !u->isSetUpForRangedAttack()) { why = "this unit must set up before it can fire: unit_action set_up (costs one move), then attack; moving undoes the set-up"; return false; }
-			if(!u->canRangeStrikeAt(p->getX(), p->getY())) { why = "cannot range-strike that tile (out of range, no line of sight, not at war, or this unit already attacked this turn)"; return false; }
+			if(u->isOutOfAttacks()) { why = "this unit already attacked this turn"; return false; }
+			int iDistance = plotDistance(u->getX(), u->getY(), p->getX(), p->getY());
+			if(iDistance > u->GetRange()) { why = ClaudeFormat("out of range: the target is %d tiles away and this unit's range is %d", iDistance, u->GetRange()); return false; }
+			if(u->getUnitInfo().IsRangeAttackOnlyInDomain() && (!p->isValidDomainForAction(*u) || u->plot()->getArea() != p->getArea())) { why = "this unit can only fire at targets on the same body of water"; return false; }
+			if(!u->IsRangeAttackIgnoreLOS() && u->getDomainType() != DOMAIN_AIR && !u->plot()->canSeePlot(p, me->getTeam(), u->GetRange(), u->getFacingDirection(true)))
+			{
+				why = "no line of sight: hills, mountains, forest or jungle between this unit and the target block the view; fire from a hill or an adjacent tile, or from another angle";
+				return false;
+			}
+			if(!u->canRangeStrikeAt(p->getX(), p->getY())) { why = "no enemy you can target on that tile"; return false; }
 		}
 		else
 		{
