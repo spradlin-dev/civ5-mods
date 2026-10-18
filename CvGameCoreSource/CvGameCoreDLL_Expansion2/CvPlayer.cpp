@@ -2076,6 +2076,10 @@ void CvPlayer::acquireCity(CvCity* pOldCity, bool bConquest, bool bGift)
 		}
 	}
 
+	bool abSeenBy[MAX_TEAMS];
+	for(int iSeenTeam = 0; iSeenTeam < MAX_TEAMS; ++iSeenTeam)
+		abSeenBy[iSeenTeam] = pOldCity->isRevealed((TeamTypes)iSeenTeam, false);
+
 	pOldCity->PreKill();
 
 	{
@@ -2119,6 +2123,10 @@ void CvPlayer::acquireCity(CvCity* pOldCity, bool bConquest, bool bGift)
 	pNewCity = initCity(pCityPlot->getX(), pCityPlot->getY(), !bConquest, (!bConquest && !bGift));
 
 	CvAssertMsg(pNewCity != NULL, "NewCity is not assigned a valid value");
+
+	// A fresh city is revealed only to teams that see the tile now; keep the old city's reveals.
+	for(int iSeenTeam = 0; iSeenTeam < MAX_TEAMS; ++iSeenTeam)
+		if(abSeenBy[iSeenTeam]) pNewCity->setRevealed((TeamTypes)iSeenTeam, true);
 
 #ifdef _MSC_VER
 #pragma warning ( push )

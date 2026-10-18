@@ -767,14 +767,11 @@ namespace ClaudeTool
 		if(eRoute != NO_ROUTE) o["route"] = J(RouteName(eRoute));
 		PlayerTypes eOwner = p->getRevealedOwner(eTeam);
 		if(eOwner != NO_PLAYER) o["owner"] = J(CivName(eOwner));
-		if(p->isCity())
+		CvCity* c = p->getPlotCity();
+		if(c && c->isRevealed(eTeam, false))
 		{
-			CvCity* c = p->getPlotCity();
-			if(c)
-			{
-				o["city"] = J(c->getName().c_str());
-				o["city_owner"] = J(CivName(c->getOwner()));
-			}
+			o["city"] = J(c->getName().c_str());
+			o["city_owner"] = J(eOwner != NO_PLAYER ? CivName(eOwner) : "unknown: it changed hands while out of sight");
 		}
 		if(p->isGoody(eTeam)) o["ancient_ruins"] = J(true);
 

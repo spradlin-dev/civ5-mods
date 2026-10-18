@@ -32,7 +32,9 @@ namespace
 		}
 	}
 
-	CvCity* FindCityAnywhere(const JObj& args, std::string& err)
+	// A city the model's civilization has seen; one it has not is reported as absent, so the
+	// lookup itself reveals nothing.
+	CvCity* FindCityAnywhere(TeamTypes eTeam, const JObj& args, std::string& err)
 	{
 		int x = ArgInt(args, "x", -1), y = ArgInt(args, "y", -1);
 		if((x >= 0) != (y >= 0)) { err = "give both x and y"; return NULL; }
@@ -40,7 +42,8 @@ namespace
 		{
 			CvPlot* p = GC.getMap().plot(x, y);
 			CvCity* c = p ? p->getPlotCity() : NULL;
-			if(!c) err = "no city at that tile";
+			if(c && !c->isRevealed(eTeam, false)) c = NULL;
+			if(!c) err = "no city you have seen at that tile";
 			return c;
 		}
 		PlayerTypes e = FindPlayer(ArgStr(args, "civ"));
@@ -50,8 +53,8 @@ namespace
 		int iLoop = 0;
 		CvPlayer& owner = GET_PLAYER(e);
 		for(CvCity* c = owner.firstCity(&iLoop); c; c = owner.nextCity(&iLoop))
-			if(_stricmp(c->getName().c_str(), name.c_str()) == 0) return c;
-		err = "no city of " + CivName(e) + " named '" + name + "'";
+			if(c->isRevealed(eTeam, false) && _stricmp(c->getName().c_str(), name.c_str()) == 0) return c;
+		err = "no city of " + CivName(e) + " named '" + name + "' that you have seen";
 		return NULL;
 	}
 
@@ -131,7 +134,7 @@ CLAUDE_TOOL(ToolMoveSpy)
 		o["spy"] = J("withdrawn");
 		return JVal(o);
 	}
-	CvCity* c = FindCityAnywhere(args, err);
+	CvCity* c = FindCityAnywhere(me->getTeam(), args, err);
 	if(!c) return JVal();
 	bool bDiplomat = ArgBool(args, "as_diplomat", false);
 	if(!pE->CanMoveSpyTo(c, iSpy, bDiplomat)) { err = "the spy cannot go there now (unknown city, your own city as diplomat, already a spy there, or the spy is busy)"; return JVal(); }

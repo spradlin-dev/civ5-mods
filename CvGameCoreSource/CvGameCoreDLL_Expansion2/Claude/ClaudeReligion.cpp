@@ -89,7 +89,7 @@ namespace
 		o["founder"] = J(bMetFounder ? CivName(r->m_eFounder) : "a civilization you have not met");
 		o["enhanced"] = J(r->m_bEnhanced);
 		CvPlot* p = GC.getMap().plot(r->m_iHolyCityX, r->m_iHolyCityY);
-		if(p && p->getPlotCity() && eTeam != NO_TEAM && p->isRevealed(eTeam)) o["holy_city"] = J(p->getPlotCity()->getName().c_str());
+		if(p && p->getPlotCity() && eTeam != NO_TEAM && p->getPlotCity()->isRevealed(eTeam, false)) o["holy_city"] = J(p->getPlotCity()->getName().c_str());
 		JArr beliefs;
 		for(int i = 0; i < r->m_Beliefs.GetNumBeliefs(); ++i) beliefs.push_back(BeliefJson(r->m_Beliefs.GetBelief(i)));
 		o["beliefs"] = JVal(beliefs);
