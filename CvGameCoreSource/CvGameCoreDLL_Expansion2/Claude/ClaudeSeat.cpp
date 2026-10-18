@@ -6,8 +6,12 @@ extern "C" __declspec(dllimport) HRESULT __stdcall CoCreateGuid(GUID* pguid);
 #include "ClaudeBridge.h"
 #include "ClaudeDiplomacy.h"
 #include "ClaudeLogText.h"
+#include "ClaudePopups.h"
+#include "ClaudeToolSupport.h"
 #include "../CvGame.h"
 #include "../CvPlayer.h"
+#include "../CvUnit.h"
+#include "../CvTypes.h"
 #include "../CvGlobals.h"
 
 namespace
@@ -271,6 +275,16 @@ void ClaudeNoteSeatNotification(PlayerTypes ePlayer, const char* szMessage, cons
 	size_t at = text.find(dismiss);
 	if(at != std::string::npos) text.erase(at);
 	ClaudeBridge::Get().LogLineFor(ePlayer, CLAUDE_LOG_NOTIFICATIONS, "Notification: " + text);
+}
+
+void ClaudeNoteOrdersCancelled(CvUnit* u, const char* szWhy)
+{
+	if(!u || !ClaudeIsSeat(u->getOwner())) return;
+	const MissionData* m = u->GetHeadMissionData();
+	if(!m || (m->eMissionType != CvTypes::getMISSION_MOVE_TO() && m->eMissionType != CvTypes::getMISSION_ROUTE_TO())) return;
+	CvUnitEntry* info = GC.getUnitInfo(u->getUnitType());
+	std::string text = ClaudeFormat("Your %s (id %d) at (%d,%d) will not continue to (%d,%d): %s", info ? info->GetDescription() : "unit", u->GetID(), u->getX(), u->getY(), m->iData1, m->iData2, szWhy);
+	ClaudeBridge::Get().NotePopup(u->getOwner(), CLAUDE_POPUP_TEXT, 0, 0, 0, false, text, false);
 }
 
 std::vector<PlayerTypes> ClaudeTeammateSeats()

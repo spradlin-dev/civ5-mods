@@ -5,6 +5,7 @@
 
 struct ClaudeIdentity;
 struct ClaudeSession;
+class CvUnit;
 
 // Game thread only: reads the game's slot data without a lock.
 
@@ -75,3 +76,6 @@ void ClaudeNoteSeatPopup(PlayerTypes ePlayer, int iType, int iData1, int iData2,
 // Game thread. Echoes a notification for a civilization a model plays into its log.
 void ClaudeNoteSeatNotification(PlayerTypes ePlayer, const char* szMessage, const char* szSummary);
 void ClaudeNoteSeatTeamPopup(TeamTypes eTeam, int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text);
+// Game thread, just before the game drops a unit's queued move. A seat's model is told, as a
+// game message, that the move will not continue and why; other owners' units are ignored.
+void ClaudeNoteOrdersCancelled(CvUnit* u, const char* szWhy);

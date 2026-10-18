@@ -18,6 +18,7 @@
 #include "CvPlayerAI.h"
 #include "ICvDLLUserInterface.h"
 #include "CvUnitMission.h"
+#include "Claude/ClaudeSeat.h"
 #include "CvUnitCombat.h"
 #include "CvDllUnit.h"
 #include "CvTypes.h"
@@ -438,7 +439,8 @@ void CvUnitMission::ContinueMission(UnitHandle hUnit, int iSteps, int iETA)
 				{
 					bool bCityAttackInterrupt = gDLL->GetAdvisorCityAttackInterrupt();
 					bool bBadAttackInterrupt = gDLL->GetAdvisorBadAttackInterrupt();
-					if(hUnit->isHuman() && !CvPreGame::isNetworkMultiplayerGame() && !GC.getGame().IsCombatWarned() && (bCityAttackInterrupt || bBadAttackInterrupt))
+					// The advisor's attack warnings are for the human at the keyboard; a seat's units get none.
+					if(hUnit->isHuman() && !ClaudeIsSeat(hUnit->getOwner()) && !CvPreGame::isNetworkMultiplayerGame() && !GC.getGame().IsCombatWarned() && (bCityAttackInterrupt || bBadAttackInterrupt))
 					{
 						if(hUnit->canMoveInto(*pPlot, CvUnit::MOVEFLAG_ATTACK) && pPlot->isVisible(hUnit->getTeam()))
 						{

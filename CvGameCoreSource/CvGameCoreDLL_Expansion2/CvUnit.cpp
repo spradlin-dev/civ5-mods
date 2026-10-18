@@ -16250,6 +16250,7 @@ void CvUnit::setPromotionReady(bool bNewValue)
 
 		if(m_bPromotionReady)
 		{
+			ClaudeNoteOrdersCancelled(this, "it earned a promotion; choose one with promote_unit, then order it again");
 			SetAutomateType(NO_AUTOMATE);
 			ClearMissionQueue();
 			SetActivityType(ACTIVITY_AWAKE);

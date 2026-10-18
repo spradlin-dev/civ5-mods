@@ -229,6 +229,49 @@ namespace
 			if(s_requests[i].id == id) { s_requests.erase(s_requests.begin() + i); return; }
 	}
 
+	// Why a waiting request can no longer be answered; "" while it still can. A deal goes stale
+	// when the game would refuse any of its items now: peace already made, an embassy already
+	// exchanged, a resource traded away, gold spent.
+	std::string StaleReason(DiploRequest& r)
+	{
+		if(!GET_PLAYER(r.from).isAlive()) return CivName(r.from) + " is no longer in the game";
+		if(!r.hasDeal) return "";
+		CvDeal& d = r.deal;
+		for(TradedItemList::iterator it = d.m_TradedItems.begin(); it != d.m_TradedItems.end(); ++it)
+		{
+			// The same test, with the same flags, that CvGameDeals::FinalizeDeal applies when the deal is accepted.
+			if(it->m_bToRenewed) continue;
+			PlayerTypes eReceiver = (it->m_eFromPlayer == d.m_eFromPlayer) ? d.m_eToPlayer : d.m_eFromPlayer;
+			if(d.IsPossibleToTradeItem(it->m_eFromPlayer, eReceiver, it->m_eItemType, it->m_iData1, it->m_iData2, it->m_iData3, it->m_bFlag1, false, true)) continue;
+			std::string giver = (it->m_eFromPlayer == r.to) ? "you" : CivName(it->m_eFromPlayer);
+			switch(it->m_eItemType)
+			{
+			case TRADE_ITEM_PEACE_TREATY: return "you are already at peace with them";
+			case TRADE_ITEM_ALLOW_EMBASSY: return "the embassy is already in place";
+			case TRADE_ITEM_RESOURCES: return giver + " no longer " + (giver == "you" ? "have " : "has ") + ResourceName((ResourceTypes)it->m_iData1) + " to spare";
+			case TRADE_ITEM_GOLD: return giver + " no longer " + (giver == "you" ? "have" : "has") + " the gold";
+			default: return "something in it is no longer available";
+			}
+		}
+		return "";
+	}
+
+	// Drops the seat's requests the game can no longer carry out and tells the seat why, as a
+	// game message, so an offer never sits in the list only to fail when it is accepted.
+	void PruneStale(PlayerTypes eSeat)
+	{
+		for(size_t i = s_requests.size(); i-- > 0;)
+		{
+			DiploRequest& r = s_requests[i];
+			if(r.to != eSeat) continue;
+			std::string why = StaleReason(r);
+			if(why.empty()) continue;
+			std::string text = ClaudeFormat("%s withdrew request #%d (%s): %s", CivName(r.from).c_str(), r.id, StateName(r.state), why.c_str());
+			s_requests.erase(s_requests.begin() + i);
+			ClaudeBridge::Get().NotePopup(eSeat, CLAUDE_POPUP_TEXT, 0, 0, 0, false, text, false);
+		}
+	}
+
 	void Record(PlayerTypes eTo, PlayerTypes eFrom, DiploUIStateTypes eState, const char* szMessage, int iExtra, const CvDeal* pDeal)
 	{
 		DiploRequest r;
@@ -524,6 +567,7 @@ namespace
 picojson::value ClaudeDiploRequestsJson()
 {
 	PlayerTypes eMe = ClaudeSeat();
+	PruneStale(eMe);
 	JArr list;
 	for(size_t i = 0; i < s_requests.size(); ++i)
 		if(s_requests[i].to == eMe) list.push_back(RequestJson(s_requests[i]));
@@ -531,6 +575,7 @@ picojson::value ClaudeDiploRequestsJson()
 	return JVal(list);
 }
 
+// Counted every frame, so stale ones are not weeded out here; the list and the answer do that.
 int ClaudeCountDiploRequestsFor(PlayerTypes e)
 {
 	return RequestsFor(e) + ProposedDealsWithSeat(e, NULL);
@@ -544,6 +589,7 @@ int ClaudeCountDiploRequests()
 std::string ClaudeDiploWaitingNote()
 {
 	PlayerTypes eMe = ClaudeSeat();
+	PruneStale(eMe);
 	int n = RequestsFor(eMe);
 	std::string note;
 	if(n > 0) note = ClaudeFormat("%d request(s) from other leaders await your answer on your turn (diplomacy, then respond_to_request)", n);
@@ -578,8 +624,14 @@ CLAUDE_TOOL(ToolAnswerDeal)
 	return JVal(o);
 }
 
+// The requests are not saved with the game, so a reload loses the ones still waiting.
 void ClaudeResetDiploRequests()
 {
+	for(int i = 0; i < MAX_MAJOR_CIVS; ++i)
+	{
+		int n = RequestsFor((PlayerTypes)i);
+		if(n > 0) ClaudeBridge::Get().LogLineFor(i, CLAUDE_LOG_DIPLOMACY, ClaudeFormat("%d request(s) from other leaders were still waiting when a game was loaded and are gone; a leader who still wants something will ask again", n));
+	}
 	s_requests.clear();
 	s_seq = 0;
 }
@@ -649,7 +701,8 @@ CLAUDE_TOOL(ToolRespondToRequest)
 	std::string choice = ArgStr(args, "choice");
 	DiploRequest* r = FindRequest(id);
 	if(!r || r->to != me->GetID()) { err = ClaudeFormat("no open request #%d; see diplomacy.requests", id); return JVal(); }
-	if(!GET_PLAYER(r->from).isAlive()) { err = CivName(r->from) + " is gone; the request no longer matters"; EraseRequest(r->id); return JVal(); }
+	std::string stale = StaleReason(*r);
+	if(!stale.empty()) { err = "that request was withdrawn: " + stale; EraseRequest(r->id); return JVal(); }
 	CvDiplomacyAI* theirAI = GET_PLAYER(r->from).GetDiplomacyAI();
 	JObj o;
 	if(r->hasDeal)
