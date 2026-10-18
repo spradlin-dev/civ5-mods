@@ -5,7 +5,7 @@ Play Civilization V with one or more AI models as your teammates or your rivals,
 [list]
 [*]Civilization V with Brave New World, on Windows
 [*]An MCP client that runs on your PC and can connect to a local HTTP server. Claude Code is tested: https://claude.com/claude-code
-[*]A subscription to your favorite AI model. This really requires a fair amount of tokens to be able to play a long game, and not burn through your entire 5-hour window or weekly window.  A Claude Max subscription works with room to spare, while still having plenty of tokens left over for coding.
+[*]A subscription to your favorite AI model. This requires a fair amount of tokens to be able to play a long game, and not burn through your entire 5-hour window or weekly window.  A Claude Max subscription works with plenty of room to spare.
 [/list]
 Chat apps that run their connectors in the cloud, such as the ChatGPT or Claude websites, cannot reach a server on your PC.
 
