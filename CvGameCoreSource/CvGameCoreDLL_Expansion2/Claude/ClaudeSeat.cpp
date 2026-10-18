@@ -188,10 +188,7 @@ bool ClaudeKeepWatching()
 	if(eActive == NO_PLAYER) return false;
 	if(CvPreGame::slotStatus(eActive) == SS_OBSERVER) return true;
 	if(GET_PLAYER(eActive).isAlive() || !GET_PLAYER(eActive).isHuman()) return false;
-	bool bSeatAlive = false;
-	for(int i = 0; i < MAX_MAJOR_CIVS && !bSeatAlive; ++i)
-		bSeatAlive = ClaudeIsSeat((PlayerTypes)i) && GET_PLAYER((PlayerTypes)i).isAlive();
-	if(!bSeatAlive) return false;
+	if(!ClaudeAnySeatAlive()) return false;
 	// The game's own AI autoplay watches this way: the dead slot becomes an observer, keeps
 	// its team's sight, and its turns are ended for it.
 	CvPreGame::setSlotStatus(eActive, SS_OBSERVER);
@@ -303,4 +300,37 @@ void ClaudeNoteSeatTeamPopup(TeamTypes eTeam, int iType, int iData1, int iData2,
 	for(int i = 0; i < MAX_MAJOR_CIVS; ++i)
 		if(ClaudeIsSeat((PlayerTypes)i) && GET_PLAYER((PlayerTypes)i).getTeam() == eTeam)
 			ClaudeNoteSeatPopup((PlayerTypes)i, iType, iData1, iData2, iData3, bOption1, text);
+}
+
+bool ClaudeAnySeatAlive()
+{
+	for(int i = 0; i < MAX_MAJOR_CIVS; ++i)
+		if(ClaudeIsSeat((PlayerTypes)i) && GET_PLAYER((PlayerTypes)i).isAlive()) return true;
+	return false;
+}
+
+static volatile bool s_eliminateRequested = false;
+
+bool ClaudeEliminateOnScreenPlayer(std::string& err)
+{
+	PlayerTypes eActive = GC.getGame().getActivePlayer();
+	if(eActive == NO_PLAYER || !GET_PLAYER(eActive).isHuman() || ClaudeIsSeat(eActive)) { err = "no human player is on screen"; return false; }
+	if(!GET_PLAYER(eActive).isAlive()) { err = "the player on screen has already been eliminated"; return false; }
+	if(!ClaudeAnySeatAlive()) { err = "no AI seat is alive to keep the game going, so the game would simply end"; return false; }
+	// bNotify false, as the game's own elimination (CvPlayer::verifyAlive) passes it.
+	GET_PLAYER(eActive).setAlive(false, false);
+	return true;
+}
+
+void ClaudeRequestEliminateOnScreenPlayer()
+{
+	s_eliminateRequested = true;
+}
+
+void ClaudeRunEliminationRequest()
+{
+	if(!s_eliminateRequested) return;
+	s_eliminateRequested = false;
+	std::string err;
+	if(!ClaudeEliminateOnScreenPlayer(err)) ClaudeBridge::Get().LogLineFor(-1, CLAUDE_LOG_ALWAYS, "Not eliminated: " + err);
 }

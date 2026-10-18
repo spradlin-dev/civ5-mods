@@ -584,6 +584,7 @@ void ClaudeBridge::Impl::Tick()
 	DrainChat();
 	UpdateSessions();
 	ClaudeKeepSeatTurnVisible();
+	ClaudeRunEliminationRequest();
 	ClaudeRemindHumanOfDeals();
 	DrainPopups();
 

@@ -69,6 +69,17 @@ std::vector<PlayerTypes> ClaudeTeammateSeats();
 // still plays, the screen becomes an observer so the game goes on and can be watched.
 // True while that is so: the game must not end for the human's defeat.
 bool ClaudeKeepWatching();
+// Whether any seat is still alive: what keeps the game going after the human's elimination.
+bool ClaudeAnySeatAlive();
+
+// Test aid. Eliminates the human player on screen as the game does when their last city falls,
+// so that the game going on after their elimination can be checked without losing a whole game.
+// Refuses, with the reason in err, unless a seat is alive to keep the game going.
+bool ClaudeEliminateOnScreenPlayer(std::string& err);
+// UI thread: asks for the above on the next game-thread tick; a refusal is logged.
+void ClaudeRequestEliminateOnScreenPlayer();
+// Game thread, every tick.
+void ClaudeRunEliminationRequest();
 
 // Game thread. Records a popup the game only shows to the player on screen, when
 // it is for a seat (or that seat's team). Same arguments as the game's popup info.
