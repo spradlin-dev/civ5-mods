@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- F5 opens the Social Policies screen in the game; this mod wants it for quicksave, so the
+     screen moves to Ctrl+F5. -->
+<GameData>
+  <Controls>
+    <Update>
+      <Where Type="CONTROL_POLICIES_SCREEN"/>
+      <Set CtrlDown="true"/>
+    </Update>
+  </Controls>
+</GameData>

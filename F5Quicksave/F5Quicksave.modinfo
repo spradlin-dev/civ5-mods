@@ -1,10 +1,10 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Mod id="48b282ae-71d1-42af-be6d-529cfa89e407" version="3">
+<Mod id="48b282ae-71d1-42af-be6d-529cfa89e407" version="4">
   <Properties>
     <Name>F5 Quicksave</Name>
     <Stability>Alpha</Stability>
-    <Teaser>Press F5 to Quicksave</Teaser>
-    <Description>Press F5 to Quicksave</Description>
+    <Teaser>Press F5 to quicksave; Social Policies moves to Ctrl+F5</Teaser>
+    <Description>Press F5 to save the game as "F5 QuickSave". The game's own F5, the Social Policies screen, moves to Ctrl+F5 so the two do not clash.</Description>
     <Authors>spradlin-dev</Authors>
     <HideSetupGame>0</HideSetupGame>
     <AffectsSavedGames>0</AffectsSavedGames>
@@ -21,8 +21,14 @@
   <References />
   <Blocks />
   <Files>
-    <File md5="35AF00A9ACD10B3B0BBADB6E82E4AE11" import="0">F5Quicksave.lua</File>
+    <File import="0">F5Quicksave.lua</File>
+    <File import="0">XML/Controls.xml</File>
   </Files>
+  <Actions>
+    <OnModActivated>
+      <UpdateDatabase>XML/Controls.xml</UpdateDatabase>
+    </OnModActivated>
+  </Actions>
   <EntryPoints>
     <EntryPoint type="InGameUIAddin" file="F5Quicksave.lua">
       <Name>F5Quicksave</Name>
