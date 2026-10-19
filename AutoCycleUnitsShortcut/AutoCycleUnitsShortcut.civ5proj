@@ -1,0 +1,60 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Deploy" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Default</Configuration>
+    <ProjectGuid>{2e09bb66-e5a9-4e40-8fd0-9607dd01f40e}</ProjectGuid>
+    <Name>Auto Cycle Units Shortcut</Name>
+    <Guid>16acb0c0-f1dc-437b-be62-618249a52344</Guid>
+    <ModVersion>2</ModVersion>
+    <Stability>Beta</Stability>
+    <Teaser>Toggle the Auto Cycle Units option with CTRL+SHIFT+C</Teaser>
+    <Description>Adds a keyboard shortcut (CTRL+SHIFT+C) for toggling the Auto Cycle Units option.</Description>
+    <Authors>Jason Spradlin</Authors>
+    <SpecialThanks />
+    <HideSetupGame>false</HideSetupGame>
+    <AffectsSavedGames>false</AffectsSavedGames>
+    <MinCompatibleSaveVersion>0</MinCompatibleSaveVersion>
+    <SupportsSinglePlayer>true</SupportsSinglePlayer>
+    <SupportsMultiplayer>true</SupportsMultiplayer>
+    <SupportsHotSeat>true</SupportsHotSeat>
+    <SupportsMac>true</SupportsMac>
+    <ReloadAudioSystem>false</ReloadAudioSystem>
+    <ReloadLandmarkSystem>false</ReloadLandmarkSystem>
+    <ReloadStrategicViewSystem>false</ReloadStrategicViewSystem>
+    <ReloadUnitSystem>false</ReloadUnitSystem>
+    <AssemblyName>AutoCycleUnitsShortcut</AssemblyName>
+    <RootNamespace>AutoCycleUnitsShortcut</RootNamespace>
+    <ModDependencies />
+    <ModReferences />
+    <ModBlockers />
+    <ModActions> </ModActions>
+    <ModContent>
+      <Content>
+        <Type>InGameUIAddin</Type>
+        <Name>AutoCycleUnitShortcut</Name>
+        <Description>Loads the shortcut</Description>
+        <FileName>AutoCycleUnitShortcut.lua</FileName>
+      </Content>
+    </ModContent>
+    <ModProperties>
+    </ModProperties>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Default' ">
+    <OutputPath>.</OutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Package Only' ">
+    <PackageMod>true</PackageMod>
+    <DeployMod>false</DeployMod>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Deploy Only' ">
+    <PackageMod>false</PackageMod>
+    <DeployMod>true</DeployMod>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="AutoCycleUnitShortcut.lua">
+      <SubType>Lua</SubType>
+      <ImportIntoVFS>False</ImportIntoVFS>
+    </Content>
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath)\Firaxis\ModBuddy\Civ5Mod.targets" />
+</Project>

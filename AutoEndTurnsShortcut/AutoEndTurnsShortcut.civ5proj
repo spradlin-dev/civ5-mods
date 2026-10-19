@@ -1,0 +1,60 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Deploy" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Default</Configuration>
+    <ProjectGuid>{f6587dbe-cf77-48c0-9123-069580edea46}</ProjectGuid>
+    <Name>Toggle Auto End Turns Shortcut</Name>
+    <Guid>79cb5c70-d530-414d-b3a4-55294156dc68</Guid>
+    <ModVersion>2</ModVersion>
+    <Stability>Beta</Stability>
+    <Teaser>Press &quot;CTRL+SHIFT+T&quot; to toggle Auto End Turns</Teaser>
+    <Description>Adds a keyboard shortcut (CTRL+SHIFT+T) for toggling the Single Player Auto End Turn option.</Description>
+    <Authors>Jason Spradlin</Authors>
+    <SpecialThanks />
+    <HideSetupGame>false</HideSetupGame>
+    <AffectsSavedGames>false</AffectsSavedGames>
+    <MinCompatibleSaveVersion>0</MinCompatibleSaveVersion>
+    <SupportsSinglePlayer>true</SupportsSinglePlayer>
+    <SupportsMultiplayer>true</SupportsMultiplayer>
+    <SupportsHotSeat>false</SupportsHotSeat>
+    <SupportsMac>true</SupportsMac>
+    <ReloadAudioSystem>false</ReloadAudioSystem>
+    <ReloadLandmarkSystem>false</ReloadLandmarkSystem>
+    <ReloadStrategicViewSystem>false</ReloadStrategicViewSystem>
+    <ReloadUnitSystem>false</ReloadUnitSystem>
+    <AssemblyName>AutoEndTurnsShortcut</AssemblyName>
+    <RootNamespace>AutoEndTurnsShortcut</RootNamespace>
+    <ModDependencies />
+    <ModReferences />
+    <ModBlockers />
+    <ModActions> </ModActions>
+    <ModContent>
+      <Content>
+        <Type>InGameUIAddin</Type>
+        <Name>AutoEndTurnShortcut</Name>
+        <Description>Loads the shortcut</Description>
+        <FileName>AutoEndTurnShortcut.lua</FileName>
+      </Content>
+    </ModContent>
+    <ModProperties>
+    </ModProperties>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Default' ">
+    <OutputPath>.</OutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Package Only' ">
+    <PackageMod>true</PackageMod>
+    <DeployMod>false</DeployMod>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Deploy Only' ">
+    <PackageMod>false</PackageMod>
+    <DeployMod>true</DeployMod>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="AutoEndTurnShortcut.lua">
+      <SubType>Lua</SubType>
+      <ImportIntoVFS>False</ImportIntoVFS>
+    </Content>
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath)\Firaxis\ModBuddy\Civ5Mod.targets" />
+</Project>

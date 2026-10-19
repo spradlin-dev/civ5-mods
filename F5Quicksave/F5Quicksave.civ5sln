@@ -1,0 +1,23 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# ModBuddy Solution File, Format Version 11.00
+Project("{F5FC21B5-7CC2-458A-ABBA-992F515BBA20}") = "F5Quicksave", "F5Quicksave.civ5proj", "{894A1DC3-2B22-40C1-A6A1-9A762F394C47}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Default|x86 = Default|x86
+		Deploy Only|x86 = Deploy Only|x86
+		Package Only|x86 = Package Only|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{894A1DC3-2B22-40C1-A6A1-9A762F394C47}.Default|x86.ActiveCfg = Default|x86
+		{894A1DC3-2B22-40C1-A6A1-9A762F394C47}.Default|x86.Build.0 = Default|x86
+		{894A1DC3-2B22-40C1-A6A1-9A762F394C47}.Deploy Only|x86.ActiveCfg = Deploy Only|x86
+		{894A1DC3-2B22-40C1-A6A1-9A762F394C47}.Deploy Only|x86.Build.0 = Deploy Only|x86
+		{894A1DC3-2B22-40C1-A6A1-9A762F394C47}.Package Only|x86.ActiveCfg = Package Only|x86
+		{894A1DC3-2B22-40C1-A6A1-9A762F394C47}.Package Only|x86.Build.0 = Package Only|x86
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
