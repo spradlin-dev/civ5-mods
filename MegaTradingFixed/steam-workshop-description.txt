@@ -1,0 +1,12 @@
+Removes the cap on Maximum trade routes. BNW & G+K* requried,
+
+-Harbours now provide 3 additional trade routes
+-Caravnsaries now provide 1 additional trade routes
+-Colossus and Petra now provide 10 additional trade routes each
+-The East India Company wonder now provides 100 additional trade routes
+-Upon researching globalization 94 additional trade routes are made available, making the base number of trade routes 100 if no buildings are constructed.
+
+Please keep in mind there is a cap on trade routes for a reason. Changes made by this mod could result in severely unbalanced gameplay, use at own risk!
+
+This is my first Mod which I created for personal use. I am not an active modder and any bug fixes/updates/suggestions will only be added when and if I feel like it.
+*BNW is required. I have both expansions so am unsure if G+K is also needed.
