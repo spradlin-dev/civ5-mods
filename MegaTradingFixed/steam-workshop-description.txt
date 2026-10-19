@@ -1,14 +1,16 @@
-A fix for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2816239831]Mega Trading (Additional Trade Routes)[/url] by [url=https://steamcommunity.com/id/UnicronNinja]Unicorn Ninja[/url], which no longer works with the current game. Same numbers, same effect; only the way they are applied is new. The original description follows.
+A fix for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2816239831]Mega Trading (Additional Trade Routes)[/url] by [url=https://steamcommunity.com/id/UnicronNinja]Unicorn Ninja[/url], which no longer works with the current game. Same numbers, same effect; only the way they are applied is new.
 
-Removes the cap on Maximum trade routes. BNW & G+K* required,
+[h1]The original description[/h1]
+[quote]Removes the cap on Maximum trade routes. BNW & G+K* required,
 
-- Harbours now provide 3 additional trade routes
-- Caravansaries now provide 1 additional trade routes
-- Colossus and Petra now provide 10 additional trade routes each
-- The East India Company wonder now provides 100 additional trade routes
-- Upon researching globalization 94 additional trade routes are made available, making the base number of trade routes 100 if no buildings are constructed.
+[list]
+[*]Harbours now provide 3 additional trade routes
+[*]Caravansaries now provide 1 additional trade routes
+[*]Colossus and Petra now provide 10 additional trade routes each
+[*]The East India Company wonder now provides 100 additional trade routes
+[*]Upon researching globalization 94 additional trade routes are made available, making the base number of trade routes 100 if no buildings are constructed.
+[/list]
+[b]Please keep in mind there is a cap on trade routes for a reason. Changes made by this mod could result in severely unbalanced gameplay, use at own risk![/b]
 
-Please keep in mind there is a cap on trade routes for a reason. Changes made by this mod could result in severely unbalanced gameplay, use at own risk!
-
-This is my first Mod which I created for personal use. I am not an active modder and any bug fixes/updates/suggestions will only be added when and if I feel like it.
-*BNW is required. I have both expansions so am unsure if G+K is also needed.
+[i]This is my first Mod which I created for personal use. I am not an active modder and any bug fixes/updates/suggestions will only be added when and if I feel like it.
+*BNW is required. I have both expansions so am unsure if G+K is also needed.[/i][/quote]
