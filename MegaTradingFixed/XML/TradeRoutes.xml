@@ -3,7 +3,7 @@
 	<Buildings>
 		<Update>
 			<Where Type="BUILDING_HARBOR"/>
-			<Set NumTradeRouteBonus="2"/>
+			<Set NumTradeRouteBonus="3"/>
 		</Update>
 		<Update>
 			<Where Type="BUILDING_CARAVANSARY"/>
@@ -11,21 +11,21 @@
 		</Update>
 		<Update>
 			<Where Type="BUILDING_COLOSSUS"/>
-			<Set NumTradeRouteBonus="5"/>
+			<Set NumTradeRouteBonus="10"/>
 		</Update>
 		<Update>
 			<Where Type="BUILDING_PETRA"/>
-			<Set NumTradeRouteBonus="5"/>
+			<Set NumTradeRouteBonus="10"/>
 		</Update>
 		<Update>
 			<Where Type="BUILDING_NATIONAL_TREASURY"/>
-			<Set NumTradeRouteBonus="50"/>
+			<Set NumTradeRouteBonus="100"/>
 		</Update>
 	</Buildings>
 	<Technologies>
 		<Update>
 			<Where Type="TECH_GLOBALIZATION"/>
-			<Set InternationalTradeRoutesChange="47"/>
+			<Set InternationalTradeRoutesChange="94"/>
 		</Update>
 	</Technologies>
 </GameData>

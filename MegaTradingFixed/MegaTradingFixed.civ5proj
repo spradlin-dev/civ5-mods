@@ -3,12 +3,12 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Default</Configuration>
     <ProjectGuid>{0d1dc5bb-a19c-451a-9f5f-9da5b8496e62}</ProjectGuid>
-    <Name>Mega Trading (Fixed)</Name>
+    <Name>Mega Trading (Additional Trade Routes) (Fixed)</Name>
     <Guid>70ce6d29-1af7-443e-9bcf-229045f8b59e</Guid>
-    <ModVersion>1</ModVersion>
+    <ModVersion>2</ModVersion>
     <Stability>Beta</Stability>
-    <Teaser>More trade routes from Harbors, Caravansaries, Colossus, Petra, the East India Company and Globalization.</Teaser>
-    <Description>A working version of Mega Trading, with half its values. Each Harbor gives 2 extra trade routes, each Caravansary 1, Colossus and Petra 5 each, the East India Company 50, and researching Globalization 47. Requires Brave New World.</Description>
+    <Teaser>The original Mega Trading, made to work: many more trade routes from Harbors, Colossus, Petra, the East India Company and Globalization.</Teaser>
+    <Description>Mega Trading (Additional Trade Routes) by Hypergloss, with the same numbers, made to work with the current game. Each Harbor gives 3 extra trade routes, each Caravansary 1, Colossus and Petra 10 each, the East India Company 100, and researching Globalization 94. Requires Brave New World. Do not enable the original at the same time.</Description>
     <Authors>Jason Spradlin</Authors>
     <SpecialThanks>Hypergloss, for the original Mega Trading</SpecialThanks>
     <HideSetupGame>false</HideSetupGame>
