@@ -2,6 +2,10 @@
 
 Versions are the mod's version numbers as the game shows them. A number missing from the list was a build that never left this PC; its changes are in the next version listed.
 
+## Version 39 (2026-10-18)
+
+- Remove the elimination test aid (the log window's test link and the test tool)
+
 ## Version 38 (2026-10-18)
 
 - Release the playback pause again whenever the engine re-takes it

@@ -282,22 +282,6 @@ end
 Controls.OpenButton:RegisterCallback(Mouse.eLClick, Open);
 Controls.CloseButton:RegisterCallback(Mouse.eLClick, Close);
 
--- A test aid: eliminates the human player on screen, handing their cities and units to a
--- teammate seat, so the game going on with the AI seats can be checked. Two clicks within a
--- few seconds, so a stray click does nothing.
-local ELIMINATE_LABEL = "Eliminate me (test)";
-local g_EliminateArmed = 0;
-Controls.EliminateButton:RegisterCallback(Mouse.eLClick, function()
-	if g_EliminateArmed > 0 then
-		g_EliminateArmed = 0;
-		Controls.EliminateButton:SetText(ELIMINATE_LABEL);
-		Game.LLMEliminateMe();
-	else
-		g_EliminateArmed = 5;
-		Controls.EliminateButton:SetText("Click again to confirm (test)");
-	end
-end);
-
 local g_PendingDismiss = {};
 
 local function GoodyText(popupInfo)
@@ -444,13 +428,6 @@ Events.AIProcessingStartedForPlayer.Add(ShowSeatTurnBanner);
 
 ContextPtr:SetUpdate(function(fDeltaTime)
 	CollectAcknowledged();
-	if g_EliminateArmed > 0 then
-		g_EliminateArmed = g_EliminateArmed - fDeltaTime;
-		if g_EliminateArmed <= 0 then
-			g_EliminateArmed = 0;
-			Controls.EliminateButton:SetText(ELIMINATE_LABEL);
-		end
-	end
 	g_SinceIdentity = g_SinceIdentity + fDeltaTime;
 	if g_SinceIdentity >= 1.0 then
 		g_SinceIdentity = 0;

@@ -82,16 +82,6 @@ bool ClaudeScreenIsObserver();
 // turn. The game core itself keeps seeing seats as human, so their play is unchanged.
 bool ClaudeEngineSeesAsHuman(PlayerTypes e);
 
-// Test aid. Eliminates the human player on screen so that the game going on after their
-// elimination can be checked without losing a whole game: a teammate seat, if there is one,
-// inherits their units and then their cities as gifts, and the civilization dies as its last
-// city goes. Refuses, with the reason in err, unless a seat is alive to keep the game going.
-bool ClaudeEliminateOnScreenPlayer(std::string& err);
-// UI thread: asks for the above on the next game-thread tick; a refusal is logged.
-void ClaudeRequestEliminateOnScreenPlayer();
-// Game thread, every tick.
-void ClaudeRunEliminationRequest();
-
 // Game thread. Records a popup the game only shows to the player on screen, when
 // it is for a seat (or that seat's team). Same arguments as the game's popup info.
 void ClaudeNoteSeatPopup(PlayerTypes ePlayer, int iType, int iData1, int iData2, int iData3, bool bOption1, const std::string& text);

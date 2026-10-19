@@ -48,8 +48,6 @@
 			</GridButton>
 		</Box>
 
-		<TextButton ID="EliminateButton" Anchor="L,B" Offset="30,22" String="Eliminate me (test)" Font="TwCenMT14" ColorSet="Beige_Black_Alpha" FontStyle="Shadow" MouseOverStyle="SoftShadow" ConsumeMouse="1" />
-
 		<GridButton ID="CloseButton" Style="SmallButton" Size="150,32" Anchor="C,B" Offset="0,16">
 			<Label Anchor="C,C" String="TXT_KEY_CLOSE" Font="TwCenMT18" ColorSet="Beige_Black_Alpha" FontStyle="Shadow" />
 		</GridButton>

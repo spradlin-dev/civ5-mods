@@ -107,7 +107,6 @@ void CvLuaGame::RegisterMembers(lua_State* L)
 	Method(LLMChat);
 	Method(LLMChatUnread);
 	Method(LLMChatSeen);
-	Method(LLMEliminateMe);
 	Method(SetGameTurn);
 	Method(GetTurnYear);
 	Method(GetGameTurnYear);
@@ -851,13 +850,6 @@ int CvLuaGame::lLLMChatUnread(lua_State* L)
 int CvLuaGame::lLLMChatSeen(lua_State* L)
 {
 	ClaudeBridge::Get().MarkRepliesSeen();
-	return 0;
-}
-//------------------------------------------------------------------------------
-//void LLMEliminateMe();
-int CvLuaGame::lLLMEliminateMe(lua_State* L)
-{
-	ClaudeRequestEliminateOnScreenPlayer();
 	return 0;
 }
 //------------------------------------------------------------------------------

@@ -97,7 +97,6 @@ protected:
 	static int lLLMChat(lua_State* L);
 	static int lLLMChatUnread(lua_State* L);
 	static int lLLMChatSeen(lua_State* L);
-	static int lLLMEliminateMe(lua_State* L);
 	static int lSetGameTurn(lua_State* L);
 	static int lGetTurnYear(lua_State* L);
 	static int lGetGameTurnYear(lua_State* L);
