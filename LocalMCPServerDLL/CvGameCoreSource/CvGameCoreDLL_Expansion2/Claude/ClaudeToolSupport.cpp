@@ -677,6 +677,28 @@ namespace ClaudeTool
 		}
 	}
 
+	bool ResolveMapCenter(CvPlayer* me, const JObj& args, int& cx, int& cy, std::string& err)
+	{
+		bool bHasX = HasArg(args, "x"), bHasY = HasArg(args, "y");
+		if(bHasX != bHasY) { err = "give both x and y, or neither to center on your capital"; return false; }
+		if(bHasX)
+		{
+			if(!RequireInt(args, "x", cx, err) || !RequireInt(args, "y", cy, err)) return false;
+		}
+		else
+		{
+			CvCity* cap = me->getCapitalCity();
+			int iLoop = 0;
+			CvUnit* u = cap ? NULL : me->firstUnit(&iLoop);
+			if(cap) { cx = cap->getX(); cy = cap->getY(); }
+			else if(u) { cx = u->getX(); cy = u->getY(); }
+			else { err = "give x and y: you have no capital or units to center on"; return false; }
+		}
+		CvMap& map = GC.getMap();
+		if(cx < 0 || cy < 0 || cx >= map.getGridWidth() || cy >= map.getGridHeight()) { err = "center is off the map"; return false; }
+		return true;
+	}
+
 	JVal CityJson(CvCity* c)
 	{
 		JObj o;

@@ -314,6 +314,22 @@
 				>
 			</File>
 			<File
+				RelativePath=".\Claude\ClaudeMapImage.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeMapDraw.cpp"
+				>
+				<FileConfiguration
+					Name="Mod|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="0"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
 				RelativePath=".\Claude\ClaudeCrash.cpp"
 				>
 			</File>
@@ -773,6 +789,14 @@
 			</File>
 			<File
 				RelativePath=".\Claude\ClaudeSeatPlayback.h"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeMapImage.h"
+				>
+			</File>
+			<File
+				RelativePath=".\Claude\ClaudeMapDraw.h"
 				>
 			</File>
 			<File

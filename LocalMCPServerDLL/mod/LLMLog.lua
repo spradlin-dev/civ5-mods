@@ -449,8 +449,19 @@ ContextPtr:SetUpdate(function(fDeltaTime)
 end);
 
 ContextPtr:SetInputHandler(function(uiMsg, wParam, lParam)
-	if uiMsg == KeyEvents.KeyDown and wParam == Keys.VK_ESCAPE and not Controls.Popup:IsHidden() then
+	if Controls.Popup:IsHidden() then
+		return false;
+	end
+	if uiMsg == KeyEvents.KeyDown and wParam == Keys.VK_ESCAPE then
 		Close();
+		return true;
+	end
+	-- Enter belongs to the chat box while the log is open: sent on from here, and kept from the
+	-- game, whose Enter ends the turn.
+	if wParam == Keys.VK_RETURN and (uiMsg == KeyEvents.KeyDown or uiMsg == KeyEvents.KeyUp) then
+		if uiMsg == KeyEvents.KeyDown then
+			SendChat(Controls.ChatEntry:GetText());
+		end
 		return true;
 	end
 	return false;

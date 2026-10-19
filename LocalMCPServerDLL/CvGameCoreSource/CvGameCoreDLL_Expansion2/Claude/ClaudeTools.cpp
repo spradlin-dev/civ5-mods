@@ -4,6 +4,7 @@
 #include "ClaudeSeat.h"
 #include "ClaudeLogText.h"
 #include "ClaudeToolHandlers.h"
+#include "ClaudeMapImage.h"
 #include "ClaudeBridge.h"
 #include "ClaudeDiplomacy.h"
 #include "../CvGame.h"
@@ -490,26 +491,11 @@ CLAUDE_TOOL(ToolMap)
 	CvPlayer* me = Me(err);
 	if(!me) return JVal();
 	int cx = 0, cy = 0;
-	bool bHasX = HasArg(args, "x"), bHasY = HasArg(args, "y");
-	if(bHasX != bHasY) { err = "give both x and y, or neither to center on your capital"; return JVal(); }
-	if(bHasX)
-	{
-		if(!RequireInt(args, "x", cx, err) || !RequireInt(args, "y", cy, err)) return JVal();
-	}
-	else
-	{
-		CvCity* cap = me->getCapitalCity();
-		int iLoop = 0;
-		CvUnit* u = cap ? NULL : me->firstUnit(&iLoop);
-		if(cap) { cx = cap->getX(); cy = cap->getY(); }
-		else if(u) { cx = u->getX(); cy = u->getY(); }
-		else { err = "give x and y: you have no capital or units to center on"; return JVal(); }
-	}
+	if(!ResolveMapCenter(me, args, cx, cy, err)) return JVal();
 	int radius = ArgInt(args, "radius", 3);
 	if(radius < 1) radius = 1;
 	if(radius > 8) radius = 8;
 	CvMap& map = GC.getMap();
-	if(cx < 0 || cy < 0 || cx >= map.getGridWidth() || cy >= map.getGridHeight()) { err = "center is off the map"; return JVal(); }
 
 	JObj o;
 	o["center_x"] = J(cx);
@@ -1066,6 +1052,31 @@ CLAUDE_TOOL(ToolChat)
 	return JVal(o);
 }
 
+CLAUDE_TOOL(ToolMapImage)
+{
+	CvPlayer* me = Me(err);
+	if(!me) return JVal();
+	int cx = 0, cy = 0;
+	if(!ResolveMapCenter(me, args, cx, cy, err)) return JVal();
+	int radius = ArgInt(args, "radius", 5);
+	if(radius < 1) radius = 1;
+	if(radius > 8) radius = 8;
+	ClaudeBridge::Get().LogLine(CLAUDE_LOG_EMPIRE, ClaudeFormat("Looks at a map picture around (%d, %d), radius %d", cx, cy, radius));
+	std::string summary;
+	JArr cities, units;
+	std::string png = ClaudeRenderMapPng(me->GetID(), cx, cy, radius, summary, cities, units);
+	if(png.empty()) { err = summary; return JVal(); }
+	JObj o;
+	o["center_x"] = J(cx);
+	o["center_y"] = J(cy);
+	o["radius"] = J(radius);
+	o["note"] = J(summary);
+	o["cities_in_picture"] = JVal(cities);
+	o["units_in_picture"] = JVal(units);
+	o["image_png_base64"] = J(ClaudeBase64(png));
+	return JVal(o);
+}
+
 // ------------------------------------------------------------------ registry
 
 namespace
@@ -1292,6 +1303,9 @@ namespace
 		{ "victory_progress",
 		  "The Victory Progress screen: which victories are enabled; original capitals held by each civilization (Domination); your spaceship projects (Science); civilizations you are influential over (Culture); votes held and needed (Diplomatic).",
 		  SCHEMA_EMPTY, ToolVictoryProgress, LOG_NONE, false },
+		{ "map_image",
+		  "A picture of the explored tiles within radius (default 5, max 8) of a point (default: your capital), drawn like the game's strategic view. Hexes in rows, odd rows half a hex east, y growing northward; each row's y is written at the left edge and the top row's x values along the top. Terrain by color: greens grass, brown-tan plains, pale yellow desert, grey-blue tundra, white snow, light blue coast, dark blue ocean; darker shade = hills; dark grey hex with MTN in the middle = mountain. Hexes inside someone's borders are covered in a grid of dots in the owner's color, and the territory's outline is a thick line in that color just inside its edge. Inside each hex, three centered rows: its coordinates x,y in bold on top (followed by +N when more units are stacked there than drawn); the city, units or MTN in the middle; and along the bottom what is on the ground: a short resource name (Iron, Oil, Coal, Horses...), a feature letter (F forest, J jungle, M marsh, O oasis, fp flood plains, ice, X fallout, atl atoll, NW natural wonder) with h added for hills (Fh = forest on hills, h alone = bare hills), and an improvement (the first letters of its name: farm, mine, trade, plant...). Bright cyan edges = rivers; dark brown lines with a dot = roads. Cities are labeled boxes in the owner's color (units inside a city are not drawn). Units are circles in the owner's color with a short name; the ring says whose: white yours, green a teammate's, red an enemy's, grey anyone else's; +N when more are stacked than shown. Hatched hexes are explored but out of sight now (no units shown); a dark hex with ? was never explored. The legend names each civilization's color and relation. The text beside the picture lists the cities and units in it with exact coordinates. Use it to see borders, fronts and where armies stand; use map for exact tile details.",
+		  "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"integer\"},\"y\":{\"type\":\"integer\"},\"radius\":{\"type\":\"integer\"}}}", ToolMapImage, LOG_NONE, false },
 		{ "known_cities",
 		  "Every city of other civilizations and city-states your civilization has seen, with position, the owner as you last saw it, whether you are at war with that owner, and, while the tile is in sight, population, hit points and strength.",
 		  SCHEMA_EMPTY, ToolKnownCities, LOG_NONE, false },

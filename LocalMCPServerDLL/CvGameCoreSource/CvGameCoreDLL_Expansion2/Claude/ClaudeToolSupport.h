@@ -36,6 +36,9 @@ namespace ClaudeTool
 	bool ArgBool(const JObj& a, const char* k, bool def);
 	std::string ArgStr(const JObj& a, const char* k);
 	bool HasArg(const JObj& a, const char* k);
+	// The tile a map tool centers on: x and y when given (both or neither), else the capital,
+	// else the first unit. False with err when neither works or the tile is off the map.
+	bool ResolveMapCenter(CvPlayer* me, const JObj& args, int& cx, int& cy, std::string& err);
 
 	CvPlayer* Me(std::string& err);
 	// True when key names the entry by its type string or its displayed name.

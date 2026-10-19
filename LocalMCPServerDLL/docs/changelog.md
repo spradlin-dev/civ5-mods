@@ -2,6 +2,11 @@
 
 Versions are the mod's version numbers as the game shows them. A number missing from the list was a build that never left this PC; its changes are in the next version listed.
 
+## Version 40 (2026-10-18)
+
+- Add the map_image tool: a strategic-view style picture of the tiles around a point
+- Enter in the log window's chat box no longer also ends your turn
+
 ## Version 39 (2026-10-18)
 
 - Remove the elimination test aid (the log window's test link and the test tool)

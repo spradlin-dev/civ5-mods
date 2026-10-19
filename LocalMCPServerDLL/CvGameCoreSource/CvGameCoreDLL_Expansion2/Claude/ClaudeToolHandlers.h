@@ -101,5 +101,6 @@ CLAUDE_TOOL(ToolTradeRoutes);
 CLAUDE_TOOL(ToolMilitaryOverview);
 CLAUDE_TOOL(ToolVictoryProgress);
 CLAUDE_TOOL(ToolKnownCities);
+CLAUDE_TOOL(ToolMapImage);
 // ClaudeReligion.cpp
 CLAUDE_TOOL(ToolReligionOverview);

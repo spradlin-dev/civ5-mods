@@ -1007,11 +1007,24 @@ picojson::value ClaudeBridge::Impl::HandleRpc(const picojson::value& request, co
 		bool bIsError = false;
 		picojson::value value = CallTool(token, itName->second.get<std::string>(), args, bIsError);
 
+		// A tool that hands back a picture puts it under image_png_base64; it travels as MCP
+		// image content next to the rest of the result.
+		picojson::array content;
+		picojson::object image;
+		if(value.is<picojson::object>() && value.get<picojson::object>().count("image_png_base64"))
+		{
+			picojson::object o = value.get<picojson::object>();
+			image["type"] = picojson::value("image");
+			image["data"] = o["image_png_base64"];
+			image["mimeType"] = picojson::value("image/png");
+			o.erase("image_png_base64");
+			value = picojson::value(o);
+		}
 		picojson::object text;
 		text["type"] = picojson::value("text");
 		text["text"] = picojson::value(value.is<std::string>() ? value.get<std::string>() : value.serialize());
-		picojson::array content;
 		content.push_back(picojson::value(text));
+		if(!image.empty()) content.push_back(picojson::value(image));
 		picojson::object result;
 		result["content"] = picojson::value(content);
 		result["isError"] = picojson::value(bIsError);
