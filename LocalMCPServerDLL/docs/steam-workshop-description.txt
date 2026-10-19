@@ -25,6 +25,7 @@ Other clients: add an HTTP MCP server at http://127.0.0.1:7676/mcp.
 [*]It names itself, then asks which role you want: your civilization, a teammate, or a secret opponent. A secret opponent's civilization is chosen at random and stays hidden until you meet it.
 [*]To add another AI, start a second MCP client in its own window and ask it to play too. Each AI chooses its own civilization; you can mix teammates and opponents.
 [*]Play your turns as usual. The AI plays its turn after yours and waits for its turn by itself.
+[*]The log window includes a 2-way chat for you to communicate with your teammate LLM without leaving the game.  it dings when you receive a message from the LLM.
 [/olist]
 
 [h2]Good to know[/h2]
