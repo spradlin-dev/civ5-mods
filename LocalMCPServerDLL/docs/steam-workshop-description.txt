@@ -5,7 +5,7 @@ Play Civilization V with one or more AI models as your teammates or your rivals,
 [list]
 [*]Civilization V with Brave New World, on Windows
 [*]An MCP client that runs on your PC and can connect to a local HTTP server. Claude Code is tested: https://claude.com/claude-code
-[*]A subscription to your favorite AI model. This requires a fair amount of tokens to be able to play a long game, and not burn through your entire 5-hour window or weekly window.  A Claude Max subscription works with plenty of room to spare.
+[*]A subscription to your favorite AI model. This requires a fair amount of tokens to be able to play a long game, and not burn through your entire 5-hour window or weekly window.  A Claude Max subscription works with plenty of room to spare on Opus 5.5.
 [/list]
 Chat apps that run their connectors in the cloud, such as the ChatGPT or Claude websites, cannot reach a server on your PC.
 
@@ -32,7 +32,6 @@ Other clients: add an HTTP MCP server at http://127.0.0.1:7676/mcp.
 [*]The AI can only connect while a game is loaded (meaning the world map is up).
 [*]The server only listens on your own PC. Nothing in the game is reachable from the internet.
 [*]Saves keep the AI's civilization. After loading a save, start your client again and it picks up where it left off.
-[*]While the AI takes its turn, you can't act or save until it ends its turn.
 [*]The AI Log shows what the AIs on your team are doing. Nothing an AI did while it was your opponent is ever shown, even if it later joins your team. Its full reasoning stays in its own client window.
 [*]Single player only. Multiplayer and hotseat are not supported.
 [*]Not compatible with other mods that replace the game DLL, such as the Community Patch, Vox Populi, or Gaia's Core Mod.
