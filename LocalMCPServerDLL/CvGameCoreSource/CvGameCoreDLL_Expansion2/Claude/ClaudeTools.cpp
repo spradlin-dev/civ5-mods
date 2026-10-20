@@ -1210,7 +1210,7 @@ namespace
 		  "Demand tribute from an AI civilization: get lists the items (as in propose_deal). They give in only if they fear you; refusals sour relations.",
 		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"},\"get\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}}},\"required\":[\"civ\",\"get\"]}", ToolDemand, LOG_DIPLOMACY, false },
 		{ "discuss",
-		  "Talk to a leader: topic is ask_friendship, end_friendship, denounce, stop_settling, stop_spying, stop_converting, stop_digging or joint_war (with target: the civilization to fight).",
+		  "Talk to a leader: topic is ask_friendship, end_friendship, denounce, stop_settling, stop_spying, stop_converting, stop_digging or joint_war (with target: the civilization to fight). For ask_friendship, their_reply is the leader's answer in the leader's own words, as a human player would hear it.",
 		  "{\"type\":\"object\",\"properties\":{\"civ\":{\"type\":\"string\"},\"topic\":{\"type\":\"string\"},\"target\":{\"type\":\"string\"}},\"required\":[\"civ\",\"topic\"]}", ToolDiscuss, LOG_DIPLOMACY, false },
 		{ "religion_options",
 		  "Your faith, pantheon and religion, and every religious choice waiting for you: pantheon beliefs, founding or enhancing a religion, reformation beliefs, and great people to claim (faith, free or Maya).",

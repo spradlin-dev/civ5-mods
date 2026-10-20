@@ -896,6 +896,7 @@ CLAUDE_TOOL(ToolDiscuss)
 	CvPlayer* other = OtherMajor(me, args, err);
 	if(!other) return JVal();
 	std::string topic = ArgStr(args, "topic");
+	DiploMessageTypes eReply = NO_DIPLO_MESSAGE_TYPE;
 	if(other->isHuman())
 	{
 		if(topic == "denounce") me->GetDiplomacyAI()->DoDenouncePlayer(other->GetID());
@@ -920,7 +921,17 @@ CLAUDE_TOOL(ToolDiscuss)
 			a1 = eTarget;
 		}
 		else { err = "unknown topic '" + topic + "'; use ask_friendship, end_friendship, denounce, stop_settling, stop_spying, stop_converting, stop_digging or joint_war"; return JVal(); }
-		other->GetDiplomacyAI()->DoFromUIDiploEvent(me->GetID(), ev, a1, -1);
+		CvDiplomacyAI* theirAI = other->GetDiplomacyAI();
+		if(topic == "ask_friendship")
+		{
+			// The leader's answer, chosen the way the engine chooses it for the human's
+			// conversation screen; the two waiting checks must run before the event resets them.
+			if(theirAI->IsTooEarlyForDoF(me->GetID())) eReply = DIPLO_MESSAGE_TOO_SOON_FOR_DOF;
+			else if(theirAI->IsDoFMessageTooSoon(me->GetID())) eReply = DIPLO_MESSAGE_REPEAT_NO;
+		}
+		theirAI->DoFromUIDiploEvent(me->GetID(), ev, a1, -1);
+		if(topic == "ask_friendship" && eReply == NO_DIPLO_MESSAGE_TYPE)
+			eReply = theirAI->IsDoFAccepted(me->GetID()) ? DIPLO_MESSAGE_WORK_WITH_US_YES : DIPLO_MESSAGE_WORK_WITH_US_NO;
 	}
 	JObj o;
 	o["ok"] = J(true);
@@ -931,6 +942,7 @@ CLAUDE_TOOL(ToolDiscuss)
 		if(topic == "stop_settling") o["they_agreed"] = J(d->IsPlayerNoSettleRequestAccepted(me->GetID()));
 		if(topic == "stop_spying") o["they_agreed"] = J(d->IsPlayerStopSpyingRequestAccepted(me->GetID()));
 		if(topic == "ask_friendship") o["they_agreed"] = J(d->IsDoFAccepted(me->GetID()));
+		if(eReply != NO_DIPLO_MESSAGE_TYPE) o["their_reply"] = J(std::string(d->GetDiploStringForMessage(eReply)));
 	}
 	return JVal(o);
 }

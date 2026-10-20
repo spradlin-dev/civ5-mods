@@ -2,6 +2,10 @@
 
 Versions are the mod's version numbers as the game shows them. A number missing from the list was a build that never left this PC; its changes are in the next version listed.
 
+## Version 42 (2026-10-19)
+
+- Asking a computer player for a Declaration of Friendship now returns the leader's answer in words (too soon, asked recently, yes or no), the same text a human player hears, in the game's language
+
 ## Version 41 (2026-10-19)
 
 - A Declaration of Friendship can no longer be put in a deal with a computer player (the game only allows that between humans); it is asked for in conversation, with the same waiting rules a human has
