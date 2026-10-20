@@ -5,10 +5,10 @@
     <ProjectGuid>{6f101f08-1858-4ab3-96ed-eb080566de90}</ProjectGuid>
     <Name>Calmer AI on Hard Difficulties</Name>
     <Guid>12e96e01-8f98-43fe-882a-47badee4d41e</Guid>
-    <ModVersion>1</ModVersion>
+    <ModVersion>2</ModVersion>
     <Stability>Beta</Stability>
-    <Teaser>Less constant war from the AI on Emperor, Immortal and Deity.</Teaser>
-    <Description>On Emperor, Immortal and Deity the AI's bigger armies make it judge a war against you as a good bet far more often. This mod lowers every AI's appetite for war against human players on those levels: to 70% on Emperor, 60% on Immortal and 50% on Deity of what it would be otherwise. Lower levels are unchanged, and so are wars between AI civilizations. Requires Brave New World.</Description>
+    <Teaser>Less constant war from the AI on King and above.</Teaser>
+    <Description>From King up, the AI's bigger armies make it judge a war against you as a good bet far more often. This mod lowers every AI's appetite for war against human players on those levels: to 85% on King, 70% on Emperor, 60% on Immortal and 50% on Deity of what it would be otherwise. Lower levels are unchanged, and so are wars between AI civilizations. Requires Brave New World.</Description>
     <Authors>Jason Spradlin</Authors>
     <SpecialThanks />
     <HideSetupGame>false</HideSetupGame>

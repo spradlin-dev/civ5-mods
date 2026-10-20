@@ -5,6 +5,10 @@
 <GameData>
   <HandicapInfos>
     <Update>
+      <Where Type="HANDICAP_KING"/>
+      <Set AIDeclareWarProb="85"/>
+    </Update>
+    <Update>
       <Where Type="HANDICAP_EMPEROR"/>
       <Set AIDeclareWarProb="70"/>
     </Update>
