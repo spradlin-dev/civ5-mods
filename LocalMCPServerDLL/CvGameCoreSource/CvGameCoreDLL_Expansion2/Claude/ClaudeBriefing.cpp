@@ -90,13 +90,13 @@ namespace
 		if(other.getTeam() == me->getTeam()) o["same_team"] = J(true);
 		if(other.isHuman()) o["human"] = J(true);
 		CvDiplomacyAI* pDiplo = other.GetDiplomacyAI();
-		if(pDiplo && !other.isHuman())
+		if(!other.isHuman())
 		{
 			o["their_attitude"] = J(ApproachName(pDiplo->GetMajorCivApproach(me->GetID(), true)));
 			o["their_opinion_of_you"] = J(OpinionName(pDiplo->GetMajorCivOpinion(me->GetID())));
-			if(pDiplo->IsDenouncedPlayer(me->GetID())) o["denounced_you"] = J(true);
-			if(pDiplo->IsDoFAccepted(me->GetID())) o["declared_friendship"] = J(true);
 		}
+		if(pDiplo->IsDenouncedPlayer(me->GetID())) o["denounced_you"] = J(true);
+		if(pDiplo->IsDoFAccepted(me->GetID())) o["declared_friendship"] = J(true);
 		if(bBrief) return JVal(o);
 		o["score"] = J(other.GetScore());
 		o["num_cities"] = J(other.getNumCities());

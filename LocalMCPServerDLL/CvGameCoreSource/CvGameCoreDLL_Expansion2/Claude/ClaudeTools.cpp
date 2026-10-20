@@ -1192,7 +1192,7 @@ namespace
 		  "Confirm you have read game messages (briefing.game_messages entries with unread=true). Actions are refused while any are unread. ids lists specific message ids; omit it to acknowledge all. Informational dialogs close in the game once acknowledged.",
 		  "{\"type\":\"object\",\"properties\":{\"ids\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}}}", ToolAcknowledgeMessages, LOG_MESSAGES, false },
 		{ "diplomacy",
-		  "Relations with every civilization you have met (war, embassies, open borders, pacts, friendship), the deals in force, and requests from other leaders waiting for your answer. Requests are kept in memory only: they do not survive a game reload.",
+		  "Relations with every civilization you have met (war, embassies, open borders, pacts, friendship); each one's teammates and its wars, friendships and denouncements with others you have met (your own relation to each is in its own fields); the deals in force; and requests from other leaders waiting for your answer. Requests are kept in memory only: they do not survive a game reload.",
 		  SCHEMA_EMPTY, ToolDiplomacy, LOG_NONE, false },
 		{ "respond_to_request",
 		  "Answer a request from another leader (id and choices from diplomacy.requests or briefing.diplomacy_requests). Deal offers take accept or decline; warnings take the listed choices; statements take acknowledge.",

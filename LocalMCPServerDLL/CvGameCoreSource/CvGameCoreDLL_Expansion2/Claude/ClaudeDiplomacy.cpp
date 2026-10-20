@@ -463,6 +463,41 @@ namespace
 		return &other;
 	}
 
+	enum RelationKind { REL_TEAMMATE, REL_AT_WAR, REL_FRIEND, REL_DENOUNCED };
+
+	bool Related(RelationKind k, CvPlayer& who, CvPlayer& toward)
+	{
+		switch(k)
+		{
+		case REL_TEAMMATE: return who.getTeam() == toward.getTeam();
+		case REL_AT_WAR: return GET_TEAM(who.getTeam()).isAtWar(toward.getTeam());
+		case REL_FRIEND: return who.GetDiplomacyAI()->IsDoFAccepted(toward.GetID());
+		case REL_DENOUNCED: return who.GetDiplomacyAI()->IsDenouncedPlayer(toward.GetID());
+		default: return false;
+		}
+	}
+
+	// Same visibility rule as the game's Global Relationships screen. Your own relation to
+	// `about` is in the per-civilization fields instead.
+	JArr RelatedMajors(CvPlayer* me, CvPlayer& about, RelationKind k)
+	{
+		JArr names;
+		for(int i = 0; i < MAX_MAJOR_CIVS; ++i)
+		{
+			CvPlayer& p = GET_PLAYER((PlayerTypes)i);
+			if(!p.isAlive() || p.GetID() == about.GetID() || p.GetID() == me->GetID()) continue;
+			if(!GET_TEAM(me->getTeam()).isHasMet(p.getTeam())) continue;
+			if(Related(k, about, p)) names.push_back(J(CivName(p.GetID())));
+		}
+		return names;
+	}
+
+	void AddRelated(JObj& o, const char* key, CvPlayer* me, CvPlayer& about, RelationKind k)
+	{
+		JArr names = RelatedMajors(me, about, k);
+		if(!names.empty()) o[key] = JVal(names);
+	}
+
 	JVal RelationJson(CvPlayer* me, CvPlayer& other)
 	{
 		JObj o;
@@ -470,21 +505,22 @@ namespace
 		CvTeam& theirs = GET_TEAM(other.getTeam());
 		o["at_war"] = J(mine.isAtWar(other.getTeam()));
 		o["same_team"] = J(other.getTeam() == me->getTeam());
+		AddRelated(o, "teammates", me, other, REL_TEAMMATE);
+		AddRelated(o, "at_war_with", me, other, REL_AT_WAR);
+		AddRelated(o, "friends_with", me, other, REL_FRIEND);
+		AddRelated(o, "has_denounced", me, other, REL_DENOUNCED);
 		o["our_embassy_with_them"] = J(mine.HasEmbassyAtTeam(other.getTeam()));
 		o["their_embassy_with_us"] = J(theirs.HasEmbassyAtTeam(me->getTeam()));
 		o["open_borders_for_us"] = J(theirs.IsAllowsOpenBordersToTeam(me->getTeam()));
 		o["open_borders_for_them"] = J(mine.IsAllowsOpenBordersToTeam(other.getTeam()));
 		o["defensive_pact"] = J(mine.IsHasDefensivePact(other.getTeam()));
 		o["research_agreement"] = J(mine.IsHasResearchAgreement(other.getTeam()));
-		if(!other.isHuman())
-		{
-			CvDiplomacyAI* d = other.GetDiplomacyAI();
-			o["declared_friendship"] = J(d->IsDoFAccepted(me->GetID()));
-			o["denounced_you"] = J(d->IsDenouncedPlayer(me->GetID()));
-			if(mine.isAtWar(other.getTeam()))
-				o["willing_to_talk_peace"] = J(mine.canChangeWarPeace(other.getTeam()) && d->IsWillingToMakePeaceWithHuman(me->GetID())
-				                              && d->GetTreatyWillingToOffer(me->GetID()) >= PEACE_TREATY_WHITE_PEACE && d->GetTreatyWillingToAccept(me->GetID()) >= PEACE_TREATY_WHITE_PEACE);
-		}
+		CvDiplomacyAI* d = other.GetDiplomacyAI();
+		o["declared_friendship"] = J(d->IsDoFAccepted(me->GetID()));
+		o["denounced_you"] = J(d->IsDenouncedPlayer(me->GetID()));
+		if(!other.isHuman() && mine.isAtWar(other.getTeam()))
+			o["willing_to_talk_peace"] = J(mine.canChangeWarPeace(other.getTeam()) && d->IsWillingToMakePeaceWithHuman(me->GetID())
+			                              && d->GetTreatyWillingToOffer(me->GetID()) >= PEACE_TREATY_WHITE_PEACE && d->GetTreatyWillingToAccept(me->GetID()) >= PEACE_TREATY_WHITE_PEACE);
 		return JVal(o);
 	}
 }
@@ -680,6 +716,7 @@ CLAUDE_TOOL(ToolDiplomacy)
 	if(!me) return JVal();
 	JObj o;
 	o["requests"] = ClaudeDiploRequestsJson();
+	o["your_teammates"] = JVal(RelatedMajors(me, *me, REL_TEAMMATE));
 	JArr rel;
 	for(int i = 0; i < MAX_MAJOR_CIVS; ++i)
 	{

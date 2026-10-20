@@ -5,7 +5,7 @@
     <ProjectGuid>{9ac20c0a-cc9d-43c4-9843-6750e8636d78}</ProjectGuid>
     <Name>Local MCP Server DLL</Name>
     <Guid>48e7f398-9447-434a-8b11-9e7e38cde8c6</Guid>
-    <ModVersion>45</ModVersion>
+    <ModVersion>46</ModVersion>
     <Stability>Beta</Stability>
     <Teaser>Runs a local MCP server so an AI model can play Civilization V.</Teaser>
     <Description>Replaces the Brave New World game core DLL with one that runs an MCP server on this PC at http://127.0.0.1:7676/mcp. An AI model connected through an MCP client on the same PC, such as Claude Code or ChatGPT, can play your civilization, a teammate or an opponent. Adds an AI Log button that shows what it is doing. Single player only. Not compatible with other mods that replace the game DLL.</Description>

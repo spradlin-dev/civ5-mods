@@ -2,6 +2,10 @@
 
 Versions are the mod's version numbers as the game shows them. A number missing from the list was a build that never left this PC; its changes are in the next version listed.
 
+## Version 46 (2026-10-20)
+
+- The diplomacy tool now shows each civilization's teammates and its wars, friendships and denouncements with others you have met, as the game's Global Relationships screen does; your own teammates are listed too, and the civs and diplomacy tools now report a human player's friendship with you or denouncement of you like a computer player's
+
 ## Version 45 (2026-10-20)
 
 - The Maya long count follows the game's own rules again: a Great Prophet can be taken there before a pantheon, and a great person can be taken again once every type has been taken once
