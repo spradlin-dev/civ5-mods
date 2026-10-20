@@ -2,10 +2,14 @@
 
 Versions are the mod's version numbers as the game shows them. A number missing from the list was a build that never left this PC; its changes are in the next version listed.
 
+## Version 45 (2026-10-20)
+
+- The Maya long count follows the game's own rules again: a Great Prophet can be taken there before a pantheon, and a great person can be taken again once every type has been taken once
+- The refusals from choose_great_person now describe the real rule
+
 ## Version 44 (2026-10-19)
 
-- The free, faith and Maya great person choices now list only the great people the player's civilization can have, as the game's own windows do; another civilization's unique great person (such as the Merchant of Venice) is no longer offered or accepted, nor is a Great Prophet before a pantheon outside the Maya long count
-- The Maya long count now allows a great person to be taken again once every type has been taken once, as the game does
+- The free, faith and Maya great person choices now list only the great people the player's civilization can have, as the game's own window does; another civilization's unique great person (such as the Merchant of Venice) and a Great Prophet before a pantheon are no longer offered or accepted
 
 ## Version 43 (2026-10-19)
 
