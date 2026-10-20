@@ -143,14 +143,30 @@ namespace
 		return u && u->GetSpecialUnitType() == GC.getInfoTypeForString("SPECIALUNIT_PEOPLE");
 	}
 
+	// The same tests as the game's own choice windows: another civilization's unique great
+	// person is out; a prophet before a pantheon is out too, except in the Maya long count
+	// window, which does not ask.
+	bool CanChooseGreatPerson(CvPlayer* me, UnitTypes e, bool bMaya)
+	{
+		if(!IsGreatPerson(e) || !me->canTrain(e, true, true, true, false)) return false;
+		return bMaya || !GC.getUnitInfo(e)->IsFoundReligion() || me->GetReligions()->HasCreatedPantheon();
+	}
+
+	// Once every type has been taken once, the long count allows repeats.
+	bool MayaRepeatBlocked(CvPlayer* me, UnitTypes e)
+	{
+		CvPlayerTraits* t = me->GetPlayerTraits();
+		return t->GetUnitBaktun(e) > 0 && !t->IsFreeMayaGreatPersonChoice();
+	}
+
 	JArr GreatPersonChoices(CvPlayer* me, bool bMaya)
 	{
 		JArr list;
 		for(int i = 0; i < GC.getNumUnitInfos(); ++i)
 		{
 			UnitTypes e = (UnitTypes)i;
-			if(!IsGreatPerson(e)) continue;
-			if(bMaya && me->GetPlayerTraits()->GetUnitBaktun(e) > 0) continue;
+			if(!CanChooseGreatPerson(me, e, bMaya)) continue;
+			if(bMaya && MayaRepeatBlocked(me, e)) continue;
 			CvCity* c = me->GetGreatPersonSpawnCity(e);
 			if(!c) continue;
 			JObj o;
@@ -357,10 +373,11 @@ CLAUDE_TOOL(ToolChooseGreatPerson)
 	if(e == NO_UNIT || !IsGreatPerson(e)) { err = "unit must be a great person type from religion_options"; return JVal(); }
 	bool bFaith = (source == "faith"), bFree = (source == "free"), bMaya = (source == "maya");
 	if(!bFaith && !bFree && !bMaya) { err = "source must be faith, free or maya"; return JVal(); }
+	if(!CanChooseGreatPerson(me, e, bMaya)) { err = "you cannot take that great person (for example another civilization's unique great person, or a Great Prophet before you have a pantheon); religion_options lists the ones you can"; return JVal(); }
 	if(bFaith && me->GetNumFaithGreatPeople() <= 0) { err = "no faith great person to claim"; return JVal(); }
 	if(bFree && me->GetNumFreeGreatPeople() <= 0) { err = "no free great person to claim"; return JVal(); }
 	if(bMaya && me->GetNumMayaBoosts() <= 0) { err = "no Maya long count bonus to claim"; return JVal(); }
-	if(bMaya && me->GetPlayerTraits()->GetUnitBaktun(e) > 0) { err = "you already took that great person in this calendar cycle"; return JVal(); }
+	if(bMaya && MayaRepeatBlocked(me, e)) { err = "you already took that great person in an earlier long count; each type can be taken once until you have taken them all"; return JVal(); }
 	CvCity* c = me->GetGreatPersonSpawnCity(e);
 	if(!c) { err = "that great person cannot appear for you right now"; return JVal(); }
 	c->GetCityCitizens()->DoSpawnGreatPerson(e, true, bFaith);

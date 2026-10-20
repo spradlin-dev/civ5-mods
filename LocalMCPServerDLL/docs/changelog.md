@@ -2,6 +2,11 @@
 
 Versions are the mod's version numbers as the game shows them. A number missing from the list was a build that never left this PC; its changes are in the next version listed.
 
+## Version 44 (2026-10-19)
+
+- The free, faith and Maya great person choices now list only the great people the player's civilization can have, as the game's own windows do; another civilization's unique great person (such as the Merchant of Venice) is no longer offered or accepted, nor is a Great Prophet before a pantheon outside the Maya long count
+- The Maya long count now allows a great person to be taken again once every type has been taken once, as the game does
+
 ## Version 43 (2026-10-19)
 
 - A model that takes a computer slot before anyone has moved now starts with a human player's units; the extra starting units the AI gets on harder levels are removed
