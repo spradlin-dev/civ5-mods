@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The game multiplies every AI's appetite for war against a human player by this per-difficulty
+     number (CvDiplomacyAI::DoUpdateMajorCivApproaches). The game itself uses 100 from Prince up;
+     these lower it on the hard levels only. AI-versus-AI wars are unaffected. -->
+<GameData>
+  <HandicapInfos>
+    <Update>
+      <Where Type="HANDICAP_EMPEROR"/>
+      <Set AIDeclareWarProb="70"/>
+    </Update>
+    <Update>
+      <Where Type="HANDICAP_IMMORTAL"/>
+      <Set AIDeclareWarProb="60"/>
+    </Update>
+    <Update>
+      <Where Type="HANDICAP_DEITY"/>
+      <Set AIDeclareWarProb="50"/>
+    </Update>
+  </HandicapInfos>
+</GameData>
