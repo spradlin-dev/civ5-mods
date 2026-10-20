@@ -112,6 +112,22 @@ bool ClaudeSeatOnScreen()
 	return ClaudeBridge::Get().Current().seat == CLAUDE_SEAT_SCREEN;
 }
 
+// A computer slot starts with the handicap's extra units for the AI. Taken before anyone has
+// moved, it gets a human's start instead: the units are dealt again now that the player counts
+// as human.
+static void DealHumanStartingUnits(CvPlayer& p)
+{
+	if(GC.getGame().getElapsedGameTurns() > 0 || p.getNumCities() > 0) return;
+	int iLoop;
+	for(CvUnit* pUnit = p.firstUnit(&iLoop); pUnit != NULL; pUnit = p.nextUnit(&iLoop))
+		if(pUnit->hasMoved()) return;
+	for(CvUnit* pUnit = p.firstUnit(&iLoop); pUnit != NULL; pUnit = p.nextUnit(&iLoop))
+		pUnit->kill(false);
+	CvGameInitialItemsOverrides kOverrides;
+	p.initFreeUnits(kOverrides);
+	ClaudeBridge::Get().LogLineFor(p.GetID(), CLAUDE_LOG_TURN, "Starts with a human player's units; the computer's extra starting units are gone");
+}
+
 bool ClaudeClaimSeat(PlayerTypes ePlayer, std::string& err, bool bAssignedOpponent)
 {
 	CvGame& game = GC.getGame();
@@ -143,6 +159,7 @@ bool ClaudeClaimSeat(PlayerTypes ePlayer, std::string& err, bool bAssignedOppone
 	CvPreGame::setSlotStatus(ePlayer, SS_TAKEN);
 	PlayerTypes eActive = game.getActivePlayer();
 	if(eActive != NO_PLAYER) CvPreGame::setHandicap(ePlayer, CvPreGame::handicap(eActive));
+	DealHumanStartingUnits(p);
 	Bind(ePlayer, label, "now plays");
 	return true;
 }

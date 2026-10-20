@@ -2,6 +2,10 @@
 
 Versions are the mod's version numbers as the game shows them. A number missing from the list was a build that never left this PC; its changes are in the next version listed.
 
+## Version 43 (2026-10-19)
+
+- A model that takes a computer slot before anyone has moved now starts with a human player's units; the extra starting units the AI gets on harder levels are removed
+
 ## Version 42 (2026-10-19)
 
 - Asking a computer player for a Declaration of Friendship now returns the leader's answer in words (too soon, asked recently, yes or no), the same text a human player hears, in the game's language
