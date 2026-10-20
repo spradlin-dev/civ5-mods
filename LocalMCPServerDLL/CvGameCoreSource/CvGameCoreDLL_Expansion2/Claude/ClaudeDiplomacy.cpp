@@ -377,6 +377,13 @@ namespace
 			}
 			else if(kind == "declaration_of_friendship")
 			{
+				// The game's own trade screen offers this item between humans only; a computer
+				// player is asked in conversation, where the acquaintance and cooldown rules apply.
+				if(!GET_PLAYER(eGiver).isHuman() || !GET_PLAYER(eReceiver).isHuman())
+				{
+					err = "a declaration_of_friendship can only be traded with a human player; ask a computer player with discuss (topic ask_friendship)";
+					return false;
+				}
 				ok = deal.IsPossibleToTradeItem(eGiver, eReceiver, TRADE_ITEM_DECLARATION_OF_FRIENDSHIP);
 				if(ok) deal.AddDeclarationOfFriendship(eGiver);
 			}

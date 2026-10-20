@@ -2,6 +2,10 @@
 
 Versions are the mod's version numbers as the game shows them. A number missing from the list was a build that never left this PC; its changes are in the next version listed.
 
+## Version 41 (2026-10-19)
+
+- A Declaration of Friendship can no longer be put in a deal with a computer player (the game only allows that between humans); it is asked for in conversation, with the same waiting rules a human has
+
 ## Version 40 (2026-10-18)
 
 - Add the map_image tool: a strategic-view style picture of the tiles around a point
