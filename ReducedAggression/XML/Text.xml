@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The tooltip on a greyed-out Declare War button when a mod forbids the war. -->
+<GameData>
+  <Language_en_US>
+    <Update>
+      <Where Tag="TXT_KEY_DIPLO_MAY_NOT_ATTACK_MOD"/>
+      <Set Text="No war on a civilization that has a Declaration of Friendship with anyone on your team, nor for a few turns after denouncing them (5 turns on Standard speed). (Reduced Aggression)"/>
+    </Update>
+  </Language_en_US>
+</GameData>

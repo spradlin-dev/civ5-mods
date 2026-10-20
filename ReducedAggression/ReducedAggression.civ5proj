@@ -3,12 +3,12 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Default</Configuration>
     <ProjectGuid>{6f101f08-1858-4ab3-96ed-eb080566de90}</ProjectGuid>
-    <Name>Calmer AI on Hard Difficulties</Name>
+    <Name>Reduced Aggression</Name>
     <Guid>12e96e01-8f98-43fe-882a-47badee4d41e</Guid>
-    <ModVersion>2</ModVersion>
+    <ModVersion>3</ModVersion>
     <Stability>Beta</Stability>
-    <Teaser>Less constant war from the AI on King and above.</Teaser>
-    <Description>From King up, the AI's bigger armies make it judge a war against you as a good bet far more often. This mod lowers every AI's appetite for war against human players on those levels: to 85% on King, 70% on Emperor, 60% on Immortal and 50% on Deity of what it would be otherwise. Lower levels are unchanged, and so are wars between AI civilizations. Requires Brave New World.</Description>
+    <Teaser>No war between friends, and a calmer AI on King and above.</Teaser>
+    <Description>Two rules against sudden wars. (1) A Declaration of Friendship means peace: nobody, AI or human, can declare war on a civilization that has an active friendship with anyone on their team. Denouncing someone ends the friendship, and war is only possible a few turns after a denounce (5 turns on Standard speed, longer on slower speeds), so a former friend always gets a warning first. (2) From King up, the AI's bigger armies make it judge a war against you as a good bet far more often. This mod lowers every AI's appetite for war against human players to 85% on King, 70% on Emperor, 60% on Immortal and 50% on Deity of what it would be otherwise; lower levels and wars between AI civilizations keep the normal numbers. Requires Brave New World.</Description>
     <Authors>Jason Spradlin</Authors>
     <SpecialThanks />
     <HideSetupGame>false</HideSetupGame>
@@ -22,8 +22,8 @@
     <ReloadLandmarkSystem>false</ReloadLandmarkSystem>
     <ReloadStrategicViewSystem>false</ReloadStrategicViewSystem>
     <ReloadUnitSystem>false</ReloadUnitSystem>
-    <AssemblyName>CalmerHardAI</AssemblyName>
-    <RootNamespace>CalmerHardAI</RootNamespace>
+    <AssemblyName>ReducedAggression</AssemblyName>
+    <RootNamespace>ReducedAggression</RootNamespace>
     <ModDependencies>
       <Association>
         <Type>Dlc</Type>
@@ -41,8 +41,20 @@
         <Type>UpdateDatabase</Type>
         <FileName>XML\Handicaps.xml</FileName>
       </Action>
+      <Action>
+        <Set>OnModActivated</Set>
+        <Type>UpdateDatabase</Type>
+        <FileName>XML\Text.xml</FileName>
+      </Action>
     </ModActions>
-    <ModContent />
+    <ModContent>
+      <Content>
+        <Type>InGameUIAddin</Type>
+        <Name>ReducedAggression</Name>
+        <Description>Loads the friendship rule</Description>
+        <FileName>ReducedAggression.lua</FileName>
+      </Content>
+    </ModContent>
     <ModProperties>
     </ModProperties>
   </PropertyGroup>
@@ -58,7 +70,15 @@
     <DeployMod>true</DeployMod>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="ReducedAggression.lua">
+      <SubType>Lua</SubType>
+      <ImportIntoVFS>False</ImportIntoVFS>
+    </Content>
     <Content Include="XML\Handicaps.xml">
+      <SubType>Lua</SubType>
+      <ImportIntoVFS>False</ImportIntoVFS>
+    </Content>
+    <Content Include="XML\Text.xml">
       <SubType>Lua</SubType>
       <ImportIntoVFS>False</ImportIntoVFS>
     </Content>

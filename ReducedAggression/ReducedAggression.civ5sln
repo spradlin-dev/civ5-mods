@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
 # ModBuddy Solution File, Format Version 11.00
-Project("{F5FC21B5-7CC2-458A-ABBA-992F515BBA20}") = "CalmerHardAI", "CalmerHardAI.civ5proj", "{6F101F08-1858-4AB3-96ED-EB080566DE90}"
+Project("{F5FC21B5-7CC2-458A-ABBA-992F515BBA20}") = "ReducedAggression", "ReducedAggression.civ5proj", "{6F101F08-1858-4AB3-96ED-EB080566DE90}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
