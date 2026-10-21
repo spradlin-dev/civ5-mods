@@ -2,6 +2,10 @@
 
 Versions are the mod's version numbers as the game shows them. A number missing from the list was a build that never left this PC; its changes are in the next version listed.
 
+## Version 47 (2026-10-20)
+
+- New deal_options tool: what a civilization has to offer in a deal and what you can offer them, as the game's trade screen lists it (gold, gold per turn, spare luxury and strategic resources with counts, cities, embassy, open borders, defensive pact, research agreement, third-party war and peace); gold and agreements that cannot be offered right now come with the reason
+
 ## Version 46 (2026-10-20)
 
 - The diplomacy tool now shows each civilization's teammates and its wars, friendships and denouncements with others you have met, as the game's Global Relationships screen does; your own teammates are listed too, and the civs and diplomacy tools now report a human player's friendship with you or denouncement of you like a computer player's

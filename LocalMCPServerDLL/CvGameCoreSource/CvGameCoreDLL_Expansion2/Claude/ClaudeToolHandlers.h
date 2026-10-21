@@ -54,6 +54,7 @@ CLAUDE_TOOL(ToolCityTask);
 
 // ClaudeDiplomacy.cpp
 CLAUDE_TOOL(ToolDiplomacy);
+CLAUDE_TOOL(ToolDealOptions);
 CLAUDE_TOOL(ToolRespondToRequest);
 CLAUDE_TOOL(ToolProposeDeal);
 CLAUDE_TOOL(ToolMakePeace);

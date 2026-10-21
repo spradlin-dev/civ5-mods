@@ -421,6 +421,167 @@ namespace
 		return true;
 	}
 
+	// ------------------------------------------------------------- deal options
+
+	struct DealSide
+	{
+		PlayerTypes eGiver, eReceiver;
+		bool youGive;
+		DealSide(CvPlayer* me, CvPlayer& giver, CvPlayer& receiver) : eGiver(giver.GetID()), eReceiver(receiver.GetID()), youGive(giver.GetID() == me->GetID()) {}
+		std::string Giver() const { return youGive ? "you" : "they"; }
+		std::string GiverObj() const { return youGive ? "you" : "them"; }
+		std::string Receiver() const { return youGive ? "they" : "you"; }
+		std::string ReceiverObj() const { return youGive ? "them" : "you"; }
+	};
+
+	// Mirrors CvDeal::IsPossibleToTradeItem, which gives no reason; when several blockers
+	// apply, this order picks the one named.
+	std::string WhyNotTradeable(const DealSide& s, TradeableItems eItem)
+	{
+		CvPlayer& giver = GET_PLAYER(s.eGiver);
+		CvPlayer& receiver = GET_PLAYER(s.eReceiver);
+		CvTeam& g = GET_TEAM(giver.getTeam());
+		CvTeam& r = GET_TEAM(receiver.getTeam());
+		bool bFriends = giver.GetDiplomacyAI()->IsDoFAccepted(s.eReceiver) && receiver.GetDiplomacyAI()->IsDoFAccepted(s.eGiver);
+		bool bEmbassies = g.HasEmbassyAtTeam(receiver.getTeam()) && r.HasEmbassyAtTeam(giver.getTeam());
+		switch(eItem)
+		{
+		case TRADE_ITEM_GOLD:
+			if(giver.GetTreasury()->GetGold() < 1) return s.Giver() + " have no gold on hand";
+			if(!bFriends && giver.getTeam() != receiver.getTeam()) return "lump sums of gold can only be traded between declared friends";
+			break;
+		case TRADE_ITEM_GOLD_PER_TURN:
+			if(giver.calculateGoldRate() < 1) return s.Giver() + " have no gold income to spare";
+			break;
+		case TRADE_ITEM_ALLOW_EMBASSY:
+			if(receiver.getNumCities() < 1) return s.Receiver() + " have no city for an embassy";
+			if(!r.isAllowEmbassyTradingAllowed()) return s.Receiver() + " do not have the technology for embassies yet";
+			if(r.HasEmbassyAtTeam(giver.getTeam())) return s.Receiver() + " already have an embassy with " + s.GiverObj();
+			break;
+		case TRADE_ITEM_OPEN_BORDERS:
+			if(!g.isOpenBordersTradingAllowed() && !r.isOpenBordersTradingAllowed()) return "neither of you has the technology for open borders yet";
+			if(!g.HasEmbassyAtTeam(receiver.getTeam())) return s.Giver() + " need an embassy with " + s.ReceiverObj() + " first";
+			if(g.IsAllowsOpenBordersToTeam(receiver.getTeam())) return s.Giver() + " already give " + s.ReceiverObj() + " open borders";
+			break;
+		case TRADE_ITEM_DEFENSIVE_PACT:
+			if(!g.isDefensivePactTradingAllowed() && !r.isDefensivePactTradingAllowed()) return "neither of you has the technology for defensive pacts yet";
+			if(!bEmbassies) return "both of you need an embassy with the other first";
+			if(g.IsHasDefensivePact(receiver.getTeam())) return "you already have a defensive pact with each other";
+			break;
+		case TRADE_ITEM_RESEARCH_AGREEMENT:
+		{
+			if(GC.getGame().isOption(GAMEOPTION_NO_SCIENCE)) return "science is turned off in this game";
+			if(!g.IsResearchAgreementTradingAllowed() && !r.IsResearchAgreementTradingAllowed()) return "neither of you has the technology for research agreements yet";
+			if(!bEmbassies) return "both of you need an embassy with the other first";
+			if(!bFriends) return "a research agreement needs a declaration of friendship between you";
+			if(g.IsHasResearchAgreement(receiver.getTeam())) return "you already have a research agreement with each other";
+			if(g.GetTeamTechs()->HasResearchedAllTechs() || r.GetTeamTechs()->HasResearchedAllTechs()) return "one of you already has every technology";
+			int iCost = GC.getGame().GetResearchAgreementCost(s.eGiver, s.eReceiver);
+			if(giver.GetTreasury()->GetGold() < iCost) return ClaudeFormat("it costs %d gold and ", iCost) + s.Giver() + " cannot pay that";
+			if(receiver.GetTreasury()->GetGold() < iCost) return ClaudeFormat("it costs %d gold and ", iCost) + s.Receiver() + " cannot pay that";
+			break;
+		}
+		case TRADE_ITEM_DECLARATION_OF_FRIENDSHIP:
+			if(bFriends) return "you are already declared friends";
+			break;
+		default: break;
+		}
+		return "the game does not allow it right now";
+	}
+
+	void Offer(JObj& o, JObj& why, const char* key, CvDeal& deal, const DealSide& s, TradeableItems eItem, int iData1, JVal value)
+	{
+		if(deal.IsPossibleToTradeItem(s.eGiver, s.eReceiver, eItem, iData1, -1, StandardDuration())) o[key] = value;
+		else why[key] = J(WhyNotTradeable(s, eItem));
+	}
+
+	JArr OfferableResources(CvDeal& deal, const DealSide& s, ResourceUsageTypes eUsage)
+	{
+		JArr out;
+		for(int i = 0; i < GC.getNumResourceInfos(); ++i)
+		{
+			ResourceTypes e = (ResourceTypes)i;
+			CvResourceInfo* info = GC.getResourceInfo(e);
+			if(!info || info->getResourceUsage() != eUsage) continue;
+			if(!deal.IsPossibleToTradeItem(s.eGiver, s.eReceiver, TRADE_ITEM_RESOURCES, e, 1)) continue;
+			JObj o;
+			o["resource"] = J(ResourceName(e));
+			o["available"] = J(deal.GetNumResource(s.eGiver, e));
+			out.push_back(JVal(o));
+		}
+		return out;
+	}
+
+	JArr OfferableCities(CvDeal& deal, const DealSide& s)
+	{
+		JArr out;
+		CvPlayer& giver = GET_PLAYER(s.eGiver);
+		int iLoop = 0;
+		for(CvCity* c = giver.firstCity(&iLoop); c; c = giver.nextCity(&iLoop))
+		{
+			if(!deal.IsPossibleToTradeItem(s.eGiver, s.eReceiver, TRADE_ITEM_CITIES, c->getX(), c->getY())) continue;
+			JObj o;
+			o["city_id"] = J(c->GetID());
+			o["name"] = J(c->getName());
+			out.push_back(JVal(o));
+		}
+		return out;
+	}
+
+	bool WarAndPeaceCanChange()
+	{
+		CvGame& game = GC.getGame();
+		return !game.isOption(GAMEOPTION_ALWAYS_WAR) && !game.isOption(GAMEOPTION_ALWAYS_PEACE) && !game.isOption(GAMEOPTION_NO_CHANGING_WAR_PEACE);
+	}
+
+	// Same players as the trade screen's Other Players list.
+	JArr OfferableThirdParties(CvDeal& deal, const DealSide& s, TradeableItems eItem)
+	{
+		JArr out;
+		CvTeam& g = GET_TEAM(GET_PLAYER(s.eGiver).getTeam());
+		CvTeam& r = GET_TEAM(GET_PLAYER(s.eReceiver).getTeam());
+		for(int i = 0; i < MAX_CIV_PLAYERS; ++i)
+		{
+			CvPlayer& p = GET_PLAYER((PlayerTypes)i);
+			TeamTypes t = p.getTeam();
+			if(!p.isAlive() || t == g.GetID() || t == r.GetID() || !g.isHasMet(t) || !r.isHasMet(t)) continue;
+			if(deal.IsPossibleToTradeItem(s.eGiver, s.eReceiver, eItem, t)) out.push_back(J(CivName(p.GetID())));
+		}
+		return out;
+	}
+
+	JVal DealSideJson(CvDeal& deal, const DealSide& s)
+	{
+		CvPlayer& giver = GET_PLAYER(s.eGiver);
+		CvPlayer& receiver = GET_PLAYER(s.eReceiver);
+		JObj o, why;
+		Offer(o, why, "gold", deal, s, TRADE_ITEM_GOLD, 1, J(deal.GetGoldAvailable(s.eGiver, TRADE_ITEM_NONE)));
+		Offer(o, why, "gold_per_turn", deal, s, TRADE_ITEM_GOLD_PER_TURN, 1, J(giver.calculateGoldRate()));
+		o["luxuries"] = JVal(OfferableResources(deal, s, RESOURCEUSAGE_LUXURY));
+		o["strategic"] = JVal(OfferableResources(deal, s, RESOURCEUSAGE_STRATEGIC));
+		o["cities"] = JVal(OfferableCities(deal, s));
+		if(giver.getTeam() != receiver.getTeam())
+		{
+			Offer(o, why, "embassy", deal, s, TRADE_ITEM_ALLOW_EMBASSY, -1, J(true));
+			Offer(o, why, "open_borders", deal, s, TRADE_ITEM_OPEN_BORDERS, -1, J(true));
+			Offer(o, why, "defensive_pact", deal, s, TRADE_ITEM_DEFENSIVE_PACT, -1, J(true));
+			Offer(o, why, "research_agreement", deal, s, TRADE_ITEM_RESEARCH_AGREEMENT, -1, J(true));
+			if(WarAndPeaceCanChange())
+			{
+				o["third_party_war"] = JVal(OfferableThirdParties(deal, s, TRADE_ITEM_THIRD_PARTY_WAR));
+				o["third_party_peace"] = JVal(OfferableThirdParties(deal, s, TRADE_ITEM_THIRD_PARTY_PEACE));
+			}
+			else
+			{
+				why["third_party_war"] = J("war and peace cannot change in this game");
+				why["third_party_peace"] = J("war and peace cannot change in this game");
+			}
+		}
+		if(giver.isHuman() && receiver.isHuman()) Offer(o, why, "declaration_of_friendship", deal, s, TRADE_ITEM_DECLARATION_OF_FRIENDSHIP, -1, J(true));
+		if(!why.empty()) o["not_available"] = JVal(why);
+		return JVal(o);
+	}
+
 	// The AI's verdict on a deal Claude proposes, and what would make it acceptable.
 	JVal JudgeDeal(CvPlayer* me, CvPlayer& other, CvDeal& deal, bool bExecute, std::string& err)
 	{
@@ -461,6 +622,13 @@ namespace
 		if(!other.isAlive()) { err = CivName(e) + " is no longer in the game"; return NULL; }
 		if(!GET_TEAM(me->getTeam()).isHasMet(other.getTeam())) { err = "you have not met " + CivName(e); return NULL; }
 		return &other;
+	}
+
+	CvPlayer* DealPartner(CvPlayer* me, const JObj& args, std::string& err)
+	{
+		CvPlayer* other = OtherMajor(me, args, err);
+		if(other && GET_TEAM(me->getTeam()).isAtWar(other->getTeam())) { err = "you are at war with them; use make_peace first"; return NULL; }
+		return other;
 	}
 
 	enum RelationKind { REL_TEAMMATE, REL_AT_WAR, REL_FRIEND, REL_DENOUNCED };
@@ -818,13 +986,29 @@ CLAUDE_TOOL(ToolRespondToRequest)
 	return JVal(o);
 }
 
+CLAUDE_TOOL(ToolDealOptions)
+{
+	CvPlayer* me = Me(err);
+	if(!me) return JVal();
+	CvPlayer* other = DealPartner(me, args, err);
+	if(!other) return JVal();
+	CvDeal deal(me->GetID(), other->GetID());
+	JObj o;
+	o["civilization"] = J(CivName(other->GetID()));
+	o["deal_length_turns"] = J(StandardDuration());
+	if(deal.IsPossibleToTradeItem(me->GetID(), other->GetID(), TRADE_ITEM_RESEARCH_AGREEMENT, -1, -1, StandardDuration()))
+		o["research_agreement_cost"] = J(GC.getGame().GetResearchAgreementCost(me->GetID(), other->GetID()));
+	o["they_can_give"] = DealSideJson(deal, DealSide(me, *other, *me));
+	o["you_can_give"] = DealSideJson(deal, DealSide(me, *me, *other));
+	return JVal(o);
+}
+
 CLAUDE_TOOL(ToolProposeDeal)
 {
 	CvPlayer* me = MeActing(err);
 	if(!me) return JVal();
-	CvPlayer* other = OtherMajor(me, args, err);
+	CvPlayer* other = DealPartner(me, args, err);
 	if(!other) return JVal();
-	if(GET_TEAM(me->getTeam()).isAtWar(other->getTeam())) { err = "you are at war with them; use make_peace first"; return JVal(); }
 	CvDeal deal(me->GetID(), other->GetID());
 	JObj::const_iterator g = args.find("give"), t = args.find("get");
 	if(g != args.end() && g->second.is<JArr>() && !AddItems(deal, me->GetID(), other->GetID(), g->second.get<JArr>(), err)) return JVal();
